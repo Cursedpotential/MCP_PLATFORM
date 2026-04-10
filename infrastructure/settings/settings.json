@@ -1,0 +1,17 @@
+{
+  "server": {
+    "port": 8080
+  },
+  "identityProviders": {
+    "keycloak": {
+      "jwksUrl": "http://keycloak:8080/realms/dial/protocol/openid-connect/certs",
+      "issuerPattern": "^http://localhost:8180/realms/dial$",
+      "rolePath": "realm_access.roles",
+      "disableJwtVerification": false
+    }
+  },
+  "encryption": {
+    "secret": "${DIAL_ENCRYPTION_SECRET:-change-me-in-production}",
+    "key": "${DIAL_ENCRYPTION_KEY:-change-me-in-production}"
+  }
+}

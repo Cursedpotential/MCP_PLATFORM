@@ -1,0 +1,136 @@
+{
+  "version": "1.0.0",
+  "description": "Identification workflow configuration — add/remove/reorder modules freely",
+  
+  "modules": {
+    "dpk_lang_id": {
+      "name": "Language Identification",
+      "tool": "dpk_lang_id",
+      "enabled": true,
+      "timeout_ms": 5000,
+      "config": {}
+    },
+    "dpk_hap_score": {
+      "name": "HAP Toxicity Scoring",
+      "tool": "dpk_hap_score",
+      "enabled": true,
+      "timeout_ms": 30000,
+      "config": {
+        "mode": "pass1"
+      }
+    },
+    "dpk_pii_redact": {
+      "name": "PII Detection & Redaction",
+      "tool": "dpk_pii_redact",
+      "enabled": true,
+      "timeout_ms": 15000,
+      "config": {
+        "operator": "replace",
+        "score_threshold": 0.6
+      }
+    },
+    "dpk_doc_quality": {
+      "name": "Document Quality Scoring",
+      "tool": "dpk_doc_quality",
+      "enabled": true,
+      "timeout_ms": 5000,
+      "config": {}
+    },
+    "dpk_readability": {
+      "name": "Readability Metrics",
+      "tool": "dpk_readability",
+      "enabled": true,
+      "timeout_ms": 5000,
+      "config": {}
+    },
+    "voice_fingerprint": {
+      "name": "Voice Fingerprinting",
+      "tool": "fingerprint_voice",
+      "enabled": true,
+      "timeout_ms": 10000,
+      "config": {}
+    },
+    "user_behavioral": {
+      "name": "User Behavioral Detection",
+      "tool": "user_behavioral_detection",
+      "enabled": true,
+      "timeout_ms": 30000,
+      "config": {
+        "mode": "pass1"
+      }
+    },
+    "user_darvo": {
+      "name": "User DARVO Detection",
+      "tool": "user_darvo_detection",
+      "enabled": true,
+      "timeout_ms": 30000,
+      "config": {
+        "mode": "pass1"
+      }
+    },
+    "user_coercive": {
+      "name": "User Coercive Control Analysis",
+      "tool": "user_coercive_control",
+      "enabled": true,
+      "timeout_ms": 30000,
+      "config": {
+        "mode": "pass1"
+      }
+    },
+    "semantica_entities": {
+      "name": "Semantica Entity Extraction",
+      "tool": "semantica_extract_entities",
+      "enabled": true,
+      "timeout_ms": 15000,
+      "config": {}
+    }
+  },
+
+  "workflows": {
+    "full_analysis": {
+      "name": "Full Text Analysis",
+      "description": "Run all identification tools in sequence",
+      "modules": [
+        "dpk_lang_id",
+        "dpk_hap_score",
+        "dpk_pii_redact",
+        "dpk_doc_quality",
+        "dpk_readability",
+        "voice_fingerprint",
+        "user_behavioral",
+        "user_darvo",
+        "user_coercive",
+        "semantica_entities"
+      ],
+      "enabled": true
+    },
+    "quick_scan": {
+      "name": "Quick Scan",
+      "description": "Fast toxicity and language check only",
+      "modules": [
+        "dpk_lang_id",
+        "dpk_hap_score",
+        "dpk_doc_quality"
+      ],
+      "enabled": true
+    },
+    "behavioral_only": {
+      "name": "Behavioral Analysis Only",
+      "description": "Run only behavioral detection tools",
+      "modules": [
+        "user_behavioral",
+        "user_darvo",
+        "user_coercive"
+      ],
+      "enabled": true
+    },
+    "pii_check": {
+      "name": "PII Check",
+      "description": "Detect and redact PII only",
+      "modules": [
+        "dpk_pii_redact"
+      ],
+      "enabled": true
+    }
+  }
+}

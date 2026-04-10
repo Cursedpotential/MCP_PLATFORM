@@ -1,0 +1,138 @@
+{
+  "routes": {},
+  "models": {
+    "openrouter-auto": {
+      "type": "chat",
+      "displayName": "OpenRouter (Auto)",
+      "iconUrl": "https://openrouter.ai/favicon.ico",
+      "description": "Multi-model router — automatically selects the best model for the task.",
+      "endpoint": "${OPENROUTER_ENDPOINT}",
+      "upstreams": [
+        {
+          "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+          "key": "${OPENROUTER_API_KEY}"
+        }
+      ],
+      "features": {
+        "systemPrompt": true,
+        "tools": true
+      }
+    },
+    "claude-sonnet": {
+      "type": "chat",
+      "displayName": "Claude 3.5 Sonnet (via OpenRouter)",
+      "description": "Anthropic Claude 3.5 Sonnet routed through OpenRouter.",
+      "endpoint": "${OPENROUTER_ENDPOINT}",
+      "upstreams": [
+        {
+          "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+          "key": "${OPENROUTER_API_KEY}",
+          "extraData": {
+            "model": "anthropic/claude-3.5-sonnet"
+          }
+        }
+      ],
+      "features": {
+        "systemPrompt": true,
+        "tools": true
+      }
+    },
+    "ollama-local": {
+      "type": "chat",
+      "displayName": "Ollama (Local)",
+      "endpoint": "http://ollama:11434/v1/chat/completions",
+      "features": {
+        "systemPrompt": true
+      }
+    }
+  },
+  "applications": {
+    "evidence-ingestion-agent": {
+      "displayName": "Evidence Ingestion Agent",
+      "description": "Orchestrates file parsing, DuckDB hashing, PG storage, and semantic extraction.",
+      "endpoint": "http://core:8080/openai/deployments/claude-sonnet/chat/completions",
+      "features": {
+        "systemPrompt": true,
+        "tools": true
+      },
+      "defaults": {
+        "systemPrompt": "INGESTION_AGENT_PROMPT.md"
+      }
+    },
+    "dial-ts-core": {
+      "displayName": "TS Extractors & Database Tools",
+      "description": "Parsers (SMS, Facebook, iMessage, WhatsApp) and storage tools (DuckDB, PostgreSQL).",
+      "endpoint": "http://ts-mcp-server:8081/mcp/chat/completions",
+      "features": {
+        "systemPrompt": false,
+        "tools": true
+      },
+      "tags": ["parser", "database", "ingestion", "ts-server"]
+    },
+    "dial-py-core": {
+      "displayName": "Semantica Knowledge Graph & Vectors",
+      "description": "NER, temporal facts, conflict detection, LanceDB vector search, Neo4j graph queries.",
+      "endpoint": "http://py-mcp-server:8000/mcp/chat/completions",
+      "features": {
+        "systemPrompt": false,
+        "tools": true
+      },
+      "tags": ["ai", "nlp", "graph", "vector", "py-server"]
+    },
+    "dial-js-core": {
+      "displayName": "Legacy JS Tools",
+      "description": "Fallback legacy JavaScript extraction tools, Docling, Pandoc.",
+      "endpoint": "http://js-mcp-server:8083/mcp/chat/completions",
+      "features": {
+        "systemPrompt": false,
+        "tools": true
+      },
+      "tags": ["legacy", "js-server", "document-processing"]
+    }
+  },
+  "interceptors": {
+    "audit-logger": {
+      "endpoint": "http://audit-logger:8085/openai/deployments/audit-logger/chat/completions"
+    }
+  },
+  "keys": {
+    "dial_admin_key": {
+      "project": "default",
+      "role": "admin"
+    },
+    "dial_api_key": {
+      "project": "default",
+      "role": "default"
+    },
+    "dial_readonly_key": {
+      "project": "default",
+      "role": "readonly"
+    }
+  },
+  "roles": {
+    "admin": {
+      "limits": {
+        "openrouter-auto": {},
+        "claude-sonnet": {},
+        "ollama-local": {},
+        "evidence-ingestion-agent": {},
+        "dial-ts-core": {},
+        "dial-py-core": {},
+        "dial-js-core": {}
+      }
+    },
+    "default": {
+      "limits": {
+        "openrouter-auto": {},
+        "claude-sonnet": {},
+        "ollama-local": {},
+        "evidence-ingestion-agent": {}
+      }
+    },
+    "readonly": {
+      "limits": {
+        "ollama-local": {}
+      }
+    }
+  }
+}

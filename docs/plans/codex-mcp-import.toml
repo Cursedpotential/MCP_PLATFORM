@@ -1,0 +1,91 @@
+model = "gpt-5.4"
+model_reasoning_effort = "xhigh"
+
+# Codex MCP import set assembled from user-level Claude/OpenCode sources.
+# Source references are documented in docs/plans/codex-mcp-import-sources.md.
+# This file is intentionally clean:
+# - portable MCPs only
+# - no Claude-specific plugin wrappers
+# - no connector/auth cache state
+# - secrets sourced from environment variables where possible
+
+[mcp_servers.mem0]
+command = "uvx"
+args = ["mem0-mcp-server"]
+enabled = true
+startup_timeout_sec = 45
+env = { MEM0_API_KEY = "${MEM0_API_KEY}", MEM0_DEFAULT_USER_ID = "matthew47" }
+
+[mcp_servers.mcp-structured-memory]
+command = "npx"
+args = ["-y", "@nmeierpolys/mcp-structured-memory"]
+enabled = true
+startup_timeout_sec = 45
+
+[mcp_servers.deepthinking]
+command = "npx"
+args = ["deepthinking-mcp"]
+enabled = true
+startup_timeout_sec = 45
+env = { MCP_EXPORT_PATH = "C:\\Users\\matts\\AI_Workspace\\deepthinking-exports", MCP_LOG_LEVEL = "info", MCP_EXPORT_OVERWRITE = "false" }
+
+[mcp_servers.iventra-notebooklm-mcp]
+command = "npx"
+args = ["-y", "notebooklm-mcp@latest"]
+enabled = true
+startup_timeout_sec = 45
+
+[mcp_servers.mcp-sequentialthinking-tools]
+command = "npx"
+args = ["-y", "mcp-sequentialthinking-tools"]
+enabled = true
+startup_timeout_sec = 45
+
+[mcp_servers.think-strategies]
+command = "npx"
+args = ["think-strategies"]
+enabled = false
+startup_timeout_sec = 45
+
+[mcp_servers.context7]
+url = "https://mcp.context7.com/mcp"
+enabled = true
+startup_timeout_sec = 45
+env = { CONTEXT7_API_KEY = "${CONTEXT7_API_KEY}" }
+
+[mcp_servers.verifiable-thinking]
+command = "npx"
+args = ["-y", "verifiable-thinking-mcp"]
+enabled = true
+startup_timeout_sec = 45
+
+[mcp_servers.cachebro]
+command = "npx"
+args = ["cachebro", "serve"]
+enabled = true
+startup_timeout_sec = 45
+
+[mcp_servers.gemini-mcp-tool]
+command = "npx"
+args = ["-y", "gemini-mcp-tool"]
+enabled = true
+startup_timeout_sec = 45
+
+[mcp_servers.claude-code-mcp]
+command = "npx"
+args = ["-y", "@steipete/claude-code-mcp@latest"]
+enabled = true
+startup_timeout_sec = 45
+
+[mcp_servers.mcp-search]
+command = "node"
+args = ["C:\\Users\\matts\\.claude\\plugins\\marketplaces\\thedotmack\\plugin\\scripts\\mcp-server.cjs"]
+enabled = true
+startup_timeout_sec = 60
+
+[mcp_servers.morph-mcp]
+command = "npx"
+args = ["-y", "@morphllm/morphmcp"]
+enabled = true
+startup_timeout_sec = 45
+env = { MORPH_API_KEY = "${MORPH_API_KEY}", ENABLED_TOOLS = "edit_file,warpgrep_codebase_search" }

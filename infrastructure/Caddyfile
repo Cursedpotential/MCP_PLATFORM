@@ -1,0 +1,20 @@
+# AI DIAL Reverse Proxy
+# Provides HTTPS termination + basic auth in front of DIAL services
+#
+# Provides HTTPS termination in front of DIAL services
+:80 {
+	# DIAL Chat UI
+	handle /chat/* {
+		reverse_proxy chat:3000
+	}
+
+	# DIAL Core API
+	handle /api/* {
+		reverse_proxy core:8080
+	}
+
+	# Default: route everything to DIAL Core
+	handle {
+		reverse_proxy core:8080
+	}
+}
