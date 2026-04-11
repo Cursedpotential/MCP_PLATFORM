@@ -1,7 +1,9 @@
 import { DuckDbVault } from './DuckDbVault.js';
 import { PostgresWriter } from './PostgresWriter.js';
+import { createHash } from 'crypto';
 
 const PY_MCP_URL = process.env.PY_MCP_URL ?? 'http://py-mcp-server:8082';
+const MAX_MESSAGES_PER_INGESTION = 100;
 
 export interface Pass1RunResult {
   processed: number;
@@ -49,7 +51,7 @@ export class Pass1Runner {
   private async runPass1ForItem(ingestionId: string, sourceName: string): Promise<void> {
     // 1. Fetch messages for this ingestion from PostgreSQL
     const messages = await this.pg.query(
-      `SELECT id, body FROM evidence.messages WHERE (provenance->>'source_ingestion_id') = $1 LIMIT 100`,
+      `SELECT id, body FROM evidence.messages WHERE (provenance->>'source_ingestion_id') = $1 LIMIT ${MAX_MESSAGES_PER_INGESTION}`,
       [ingestionId],
     );
 
@@ -89,7 +91,6 @@ export class Pass1Runner {
       // Store forensic result in app.forensic_results
       if (entities.length > 0) {
         try {
-          const { createHash } = await import('crypto');
           const sourceHash = createHash('sha256').update(`ner:${ingestionId}:${msg.id}`).digest('hex');
           await this.pg.writeRecord('app.forensic_results', {
             source_hash: sourceHash,
