@@ -1,4 +1,4 @@
-import { DuckDBClient, getDuckDBClient } from "../services/DuckDbService.js";
+import { DuckDBClient, getDuckDBClient, IngestionLog } from "../services/DuckDbService.js";
 
 /**
  * DuckDbVault Object
@@ -19,6 +19,22 @@ export class DuckDbVault {
     if (!this.client.isInitialized()) {
       await this.client.initialize();
     }
+  }
+
+  /**
+   * Calculates a SHA-256 hash for the given content (chain of custody at first touch).
+   */
+  async hashContent(content: string | Buffer): Promise<string> {
+    await this.initialize();
+    return this.client.hashContent(content);
+  }
+
+  /**
+   * Looks up an existing ingestion by its source hash (deduplication check).
+   */
+  async getIngestionByHash(hash: string): Promise<IngestionLog | null> {
+    await this.initialize();
+    return this.client.getIngestionByHash(hash);
   }
 
   /**

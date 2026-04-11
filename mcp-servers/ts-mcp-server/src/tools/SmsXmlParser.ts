@@ -10,8 +10,17 @@ export interface NormalizedMessage {
     recipient: string;
     raw_address: string;
     contact_name: string;
-    record_type: 'call' | 'message';
+    record_type: 'call' | 'message' | 'mms';
     raw_data: string;
+    // Optional fields extracted from raw XML — only present when available
+    type_code?: string;        // @_type from XML (1=received/incoming, 2=sent/outgoing, etc.)
+    status_code?: string;      // @_st (SMS delivery status code)
+    read_status?: string;      // @_read (1=read, 0=unread)
+    duration_seconds?: string; // @_duration (calls only)
+    result_label?: string;     // Human-readable call result (calls only)
+    message_box?: string;      // @_msg_box (1=inbox, 2=sent, 3=draft, 4=outbox)
+    has_attachments?: boolean; // Whether MMS record has attachment parts
+    attachment_count?: number; // Number of MMS attachment parts
   };
 }
 
@@ -109,16 +118,18 @@ export class SmsXmlParser {
       let sender = '';
       let recipient = '';
 
+      // Call type labels — defined here so they're available for result_label in the return
+      const callTypes: Record<string, string> = {
+        "1": "Incoming",
+        "2": "Outgoing",
+        "3": "Missed",
+        "4": "Voicemail",
+        "5": "Rejected",     // FORENSIC: Actively rejected
+        "6": "Refused_List"  // FORENSIC: Number on block list
+      };
+
       if (isCall) {
         // Handle Call Log Schema including Forensic Block Indicators
-        const callTypes: Record<string, string> = { 
-          "1": "Incoming", 
-          "2": "Outgoing", 
-          "3": "Missed", 
-          "4": "Voicemail", 
-          "5": "Rejected",     // FORENSIC: Actively rejected
-          "6": "Refused_List"  // FORENSIC: Number on block list
-        };
         const duration = data['@_duration'] || '0';
         
         // Forensic Call Blocking Logic (Ported from ConflictAnalysisApp)
@@ -154,6 +165,15 @@ export class SmsXmlParser {
 
       if (!textContent.trim()) return null; // Skip empty messages
 
+      // MMS attachment detection: count non-text parts
+      const mmsParts: unknown[] = !!parsed.mms && data.parts?.part
+        ? (Array.isArray(data.parts.part) ? data.parts.part : [data.parts.part])
+        : [];
+      const attachmentParts = mmsParts.filter(
+        (p: any) => p?.['@_ct'] && !p['@_ct'].startsWith('text/')
+      );
+      const hasAttachments = attachmentParts.length > 0;
+
       // Return a standard NormalizedMessage
       return {
         text: textContent.trim(),
@@ -163,9 +183,18 @@ export class SmsXmlParser {
           recipient,
           raw_address: address,
           contact_name: contactName,
-          record_type: isCall ? 'call' : 'message',
+          record_type: parsed.call ? 'call' : parsed.mms ? 'mms' : 'message',
           // We push the whole raw object into metadata so DuckDB can store it as JSON
-          raw_data: JSON.stringify(data) 
+          raw_data: JSON.stringify(data),
+          // Optional fields populated from raw XML
+          type_code: data['@_type'] !== undefined ? String(data['@_type']) : undefined,
+          status_code: data['@_st'] !== undefined ? String(data['@_st']) : undefined,
+          read_status: data['@_read'] !== undefined ? String(data['@_read']) : undefined,
+          duration_seconds: isCall && data['@_duration'] !== undefined ? String(data['@_duration']) : undefined,
+          result_label: isCall ? (callTypes[type] ?? 'Unknown') : undefined,
+          message_box: data['@_msg_box'] !== undefined ? String(data['@_msg_box']) : undefined,
+          has_attachments: parsed.mms ? hasAttachments : undefined,
+          attachment_count: parsed.mms ? attachmentParts.length : undefined,
         }
       };
     } catch (error) {
