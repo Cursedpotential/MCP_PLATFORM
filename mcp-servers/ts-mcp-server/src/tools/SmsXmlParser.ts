@@ -92,6 +92,14 @@ export class SmsXmlParser {
   }
 
   /**
+   * Returns String(value) when value is not undefined, otherwise returns undefined.
+   * Used when mapping optional XML attribute values to metadata fields.
+   */
+  private optField(value: unknown): string | undefined {
+    return value !== undefined ? String(value) : undefined;
+  }
+
+  /**
    * Converts a single raw XML block into a NormalizedMessage
    */
   private parseElementToDocument(xml: string): NormalizedMessage | null {
@@ -187,12 +195,12 @@ export class SmsXmlParser {
           // We push the whole raw object into metadata so DuckDB can store it as JSON
           raw_data: JSON.stringify(data),
           // Optional fields populated from raw XML
-          type_code: data['@_type'] !== undefined ? String(data['@_type']) : undefined,
-          status_code: data['@_st'] !== undefined ? String(data['@_st']) : undefined,
-          read_status: data['@_read'] !== undefined ? String(data['@_read']) : undefined,
-          duration_seconds: isCall && data['@_duration'] !== undefined ? String(data['@_duration']) : undefined,
+          type_code: this.optField(data['@_type']),
+          status_code: this.optField(data['@_st']),
+          read_status: this.optField(data['@_read']),
+          duration_seconds: isCall ? this.optField(data['@_duration']) : undefined,
           result_label: isCall ? (callTypes[type] ?? 'Unknown') : undefined,
-          message_box: data['@_msg_box'] !== undefined ? String(data['@_msg_box']) : undefined,
+          message_box: this.optField(data['@_msg_box']),
           has_attachments: parsed.mms ? hasAttachments : undefined,
           attachment_count: parsed.mms ? attachmentParts.length : undefined,
         }
