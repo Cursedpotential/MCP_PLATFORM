@@ -118,6 +118,31 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./infrastructure/init/postgres:/docker-entrypoint-initdb.d
 
+  directus:
+    image: directus/directus:latest
+    profiles:
+      - data
+    ports:
+      - "8055:8055"
+    depends_on:
+      - postgres
+    environment:
+      KEY: ${DIRECTUS_KEY:-supersecretkey}
+      SECRET: ${DIRECTUS_SECRET:-supersecretdirsecret}
+      ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL:-admin@evidence.local}
+      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD:-admin_password}
+      DB_CLIENT: pg
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: evidence
+      DB_USER: dial
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-dial_password}
+      STORAGE_LOCATIONS: local
+      STORAGE_LOCAL_ROOT: /directus/uploads
+    volumes:
+      - directus_uploads:/directus/uploads
+      - ./infrastructure/directus/extensions:/directus/extensions
+
   ollama:
     image: ollama/ollama
     restart: unless-stopped
@@ -215,3 +240,4 @@ volumes:
   caddy_data:
   caddy_config:
   influxdb_data:
+  directus_uploads:

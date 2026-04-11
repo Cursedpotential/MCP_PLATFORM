@@ -1,0 +1,59 @@
+# Directus Flow — Evidence Upload Trigger
+# Fires when a file is uploaded to Directus and forwards it to the ts-mcp-server
+# ingestion endpoint for forensic processing.
+#
+# NOTE: This configuration is a PLANNING DOCUMENT.
+# Nothing here is authorization to activate. Owner approval required before
+# this flow is enabled in any environment.
+#
+# To import: Directus Admin → Flows → Import → select this file
+# To activate: Set status to "active" ONLY after owner approval.
+
+name: evidence-upload-trigger
+status: inactive
+trigger: event
+trigger_options:
+  type: filter
+  scope:
+    - files.upload
+  collections:
+    - directus_files
+
+first_step: forward-to-ingestor
+
+steps:
+  - id: forward-to-ingestor
+    name: Forward to TS MCP Ingestor
+    type: webhook
+    options:
+      url: "http://ts-mcp-server:8081/api/ingest"
+      method: POST
+      headers:
+        Content-Type: application/json
+      body: |
+        {
+          "file_id": "{{ $trigger.payload.id }}",
+          "filename": "{{ $trigger.payload.filename_download }}",
+          "storage": "{{ $trigger.payload.storage }}",
+          "storage_path": "{{ $trigger.payload.storage }}://{{ $trigger.payload.filename_disk }}",
+          "uploaded_by": "{{ $trigger.accountability.user }}",
+          "uploaded_on": "{{ $trigger.payload.uploaded_on }}",
+          "type": "{{ $trigger.payload.type }}",
+          "filesize": "{{ $trigger.payload.filesize }}"
+        }
+    on_success: log-result
+    on_failure: log-failure
+
+  - id: log-result
+    name: Log Ingest Success
+    type: log
+    options:
+      message: "Evidence file {{ $trigger.payload.filename_download }} forwarded to ingestor."
+      level: info
+
+  - id: log-failure
+    name: Log Ingest Failure
+    type: log
+    options:
+      message: "FAILED to forward {{ $trigger.payload.filename_download }} to ingestor. Check ts-mcp-server logs."
+      level: error

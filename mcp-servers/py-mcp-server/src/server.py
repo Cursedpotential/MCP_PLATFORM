@@ -615,6 +615,18 @@ register_tool(
 
 
 # ===========================================================================
+# Document Intelligence Tools
+# ===========================================================================
+
+try:
+    from document_intelligence.mcp_tools import register_document_intelligence_tools
+    register_document_intelligence_tools(mcp)
+    logger.info("[dial-py-core] Document intelligence tools registered.")
+except Exception as _di_err:
+    logger.warning(f"[dial-py-core] Document intelligence tools not loaded: {_di_err}")
+
+
+# ===========================================================================
 # Entry Point
 # ===========================================================================
 
