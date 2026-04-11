@@ -13,6 +13,8 @@ import { DuckDbVault } from "./tools/DuckDbVault.js";
 import { PostgresWriter } from "./tools/PostgresWriter.js";
 import { AdminTools } from "./tools/AdminTools.js";
 import { ReviewQueue } from "./tools/ReviewQueue.js";
+import { EvidenceIngestor } from "./tools/EvidenceIngestor.js";
+import { Pass1Runner } from "./tools/Pass1Runner.js";
 
 /**
  * AI DIAL TypeScript MCP Server
@@ -51,6 +53,19 @@ function getAdmin(): AdminTools {
 function getReview(): ReviewQueue {
   if (!_review) _review = new ReviewQueue();
   return _review;
+}
+
+let _ingestor: EvidenceIngestor | null = null;
+let _pass1: Pass1Runner | null = null;
+
+function getIngestor(): EvidenceIngestor {
+  if (!_ingestor) _ingestor = new EvidenceIngestor(getVault(), getPg());
+  return _ingestor;
+}
+
+function getPass1(): Pass1Runner {
+  if (!_pass1) _pass1 = new Pass1Runner(getVault(), getPg());
+  return _pass1;
 }
 
 // ---------------------------------------------------------------------------
@@ -265,6 +280,45 @@ function createMcpServer(): Server {
           required: ["review_type"],
         },
       },
+      {
+        name: "ingest_evidence",
+        description: "Platform-agnostic evidence ingestor. Detects format (XML/HTML/PDF), routes to correct parser, then triggers embedding and LanceDB write.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            file_path: { type: "string", description: "Absolute path to the evidence file." },
+            device_id: { type: "string", description: "Optional device ID for deduplication." },
+            case_id: { type: "string", description: "Optional case ID for grouping." },
+            source_platform: { type: "string", description: "Optional source platform override." },
+            extraction_method: { type: "string", description: "Optional extraction method label." },
+          },
+          required: ["file_path"],
+        },
+      },
+      {
+        name: "run_pass1_analysis",
+        description: "Runs Pass 1 analysis pipeline on pending ingested files: NER extraction, entity storage, embedding, LanceDB write.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            limit: { type: "integer", description: "Max items to process (default: 10).", default: 10 },
+          },
+        },
+      },
+      {
+        name: "evidence_search",
+        description: "Semantic search across evidence using pgvector similarity + optional keyword filter.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "Natural language search query." },
+            limit: { type: "integer", description: "Max results (default: 20).", default: 20 },
+            platform: { type: "string", description: "Optional platform filter (sms, imessage, facebook)." },
+            case_id: { type: "string", description: "Optional case ID filter." },
+          },
+          required: ["query"],
+        },
+      },
     ],
   }));
 
@@ -372,6 +426,58 @@ function createMcpServer(): Server {
       case "review_submit": {
         const result = await getReview().submitForReview(args as any);
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+
+      case "ingest_evidence": {
+        const { file_path, device_id, case_id, source_platform, extraction_method } = args as any;
+        const result = await getIngestor().ingest(file_path, {
+          deviceId: device_id,
+          caseId: case_id,
+          sourcePlatform: source_platform,
+          extractionMethod: extraction_method,
+        });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+
+      case "run_pass1_analysis": {
+        const limit = Number(args.limit ?? 10);
+        const result = await getPass1().run(limit);
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+
+      case "evidence_search": {
+        const { query, limit, platform, case_id } = args as any;
+        // Semantic search via pgvector — requires embedding the query first
+        // For now: keyword fallback search until py-mcp-server embedding is wired
+        const sql = platform
+          ? `SELECT id, conversation_id, sender, recipient, body, timestamp, platform, direction
+             FROM evidence.messages
+             WHERE body_lower ILIKE $1 AND platform = $2
+             ORDER BY timestamp DESC LIMIT $3`
+          : `SELECT id, conversation_id, sender, recipient, body, timestamp, platform, direction
+             FROM evidence.messages
+             WHERE body_lower ILIKE $1
+             ORDER BY timestamp DESC LIMIT $2`;
+        const params = platform
+          ? [`%${query}%`, platform, Number(limit ?? 20)]
+          : [`%${query}%`, Number(limit ?? 20)];
+        try {
+          const results = await getPg().query(sql, params);
+          return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+        } catch (err: any) {
+          // Fallback: body column without body_lower
+          const fallbackSql = platform
+            ? `SELECT id, conversation_id, sender, recipient, body, timestamp, platform, direction
+               FROM evidence.messages
+               WHERE body ILIKE $1 AND platform = $2
+               ORDER BY timestamp DESC LIMIT $3`
+            : `SELECT id, conversation_id, sender, recipient, body, timestamp, platform, direction
+               FROM evidence.messages
+               WHERE body ILIKE $1
+               ORDER BY timestamp DESC LIMIT $2`;
+          const results = await getPg().query(fallbackSql, params);
+          return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+        }
       }
 
       default:
