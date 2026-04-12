@@ -13,6 +13,12 @@
 		reverse_proxy core:8080
 	}
 
+	# SBV — SMS Backup Viewer web UI
+	handle /sbv/* {
+		uri strip_prefix /sbv
+		reverse_proxy sbv:8081
+	}
+
 	# Default: route everything to DIAL Core
 	handle {
 		reverse_proxy core:8080

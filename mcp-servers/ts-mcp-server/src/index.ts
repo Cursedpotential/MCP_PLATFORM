@@ -15,6 +15,8 @@ import { AdminTools } from "./tools/AdminTools.js";
 import { ReviewQueue } from "./tools/ReviewQueue.js";
 import { EvidenceIngestor } from "./tools/EvidenceIngestor.js";
 import { Pass1Runner } from "./tools/Pass1Runner.js";
+import { SbvClient } from "./tools/SbvClient.js";
+import { SbvIngestor } from "./tools/SbvIngestor.js";
 
 /**
  * AI DIAL TypeScript MCP Server
@@ -66,6 +68,19 @@ function getIngestor(): EvidenceIngestor {
 function getPass1(): Pass1Runner {
   if (!_pass1) _pass1 = new Pass1Runner(getVault(), getPg());
   return _pass1;
+}
+
+let _sbvClient: SbvClient | null = null;
+let _sbvIngestor: SbvIngestor | null = null;
+
+function getSbvClient(): SbvClient {
+  if (!_sbvClient) _sbvClient = new SbvClient();
+  return _sbvClient;
+}
+
+function getSbvIngestor(): SbvIngestor {
+  if (!_sbvIngestor) _sbvIngestor = new SbvIngestor(getVault(), getPg(), getSbvClient());
+  return _sbvIngestor;
 }
 
 // ---------------------------------------------------------------------------
@@ -319,6 +334,35 @@ function createMcpServer(): Server {
           required: ["query"],
         },
       },
+      // ----- SBV (SMS Backup Viewer) Tools -----
+      {
+        name: "sbv_ingest",
+        description: "Pulls all conversations, messages, and calls from the SBV sidecar and ingests them through the full evidence pipeline (SHA-256 hash → DuckDB dedup → UUIDv7 → PostgreSQL evidence write → write tracking).",
+        inputSchema: {
+          type: "object",
+          properties: {
+            device_id: { type: "string", description: "Optional device ID for deduplication." },
+            case_id: { type: "string", description: "Optional case ID for grouping." },
+          },
+        },
+      },
+      {
+        name: "sbv_search",
+        description: "Full-text search across messages stored in SBV (read-only, no evidence pipeline write). Useful for quick lookups before deciding to ingest.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "Search query." },
+            limit: { type: "integer", description: "Max results (default: 100).", default: 100 },
+          },
+          required: ["query"],
+        },
+      },
+      {
+        name: "sbv_health",
+        description: "Check if the SBV sidecar service is reachable.",
+        inputSchema: { type: "object", properties: {} },
+      },
     ],
   }));
 
@@ -478,6 +522,37 @@ function createMcpServer(): Server {
           const results = await getPg().query(fallbackSql, params);
           return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
         }
+      }
+
+      // ---- SBV (SMS Backup Viewer) Tools ----
+
+      case "sbv_ingest": {
+        const { device_id, case_id } = args as any;
+        const result = await getSbvIngestor().ingest({
+          deviceId: device_id,
+          caseId: case_id,
+        });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+
+      case "sbv_search": {
+        const { query, limit } = args as any;
+        const results = await getSbvClient().search(String(query), Number(limit ?? 100));
+        return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+      }
+
+      case "sbv_health": {
+        const reachable = await getSbvClient().healthCheck();
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              status: reachable ? "ok" : "unreachable",
+              sbv_url: process.env.SBV_URL ?? "http://sbv:8081",
+              web_ui: "http://localhost:8084 (direct) or http://localhost/sbv/ (via Caddy)",
+            }, null, 2),
+          }],
+        };
       }
 
       default:

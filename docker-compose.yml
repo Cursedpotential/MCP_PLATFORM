@@ -152,6 +152,21 @@ services:
       - ollama_models:/root/.ollama
 
   # ==========================================================================
+  # SBV — SMS Backup Viewer (sidecar for XML import + web browsing)
+  # ==========================================================================
+
+  sbv:
+    image: ghcr.io/lowcarbdev/sbv:stable
+    restart: unless-stopped
+    ports:
+      - "8084:8081"
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - sbv_data:/data
+
+  # ==========================================================================
   # MCP Servers
   # ==========================================================================
 
@@ -163,6 +178,11 @@ services:
     environment:
       - PORT=8081
       - DATABASE_URL=postgresql://dial:${POSTGRES_PASSWORD:-dial_password}@postgres:5432/evidence
+      - SBV_URL=http://sbv:8081
+      - SBV_USERNAME=${SBV_USERNAME:-}
+      - SBV_PASSWORD=${SBV_PASSWORD:-}
+    depends_on:
+      - sbv
 
   py-mcp-server:
     build: ./mcp-servers/py-mcp-server
@@ -241,3 +261,4 @@ volumes:
   caddy_config:
   influxdb_data:
   directus_uploads:
+  sbv_data:
