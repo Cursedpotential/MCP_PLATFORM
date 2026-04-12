@@ -241,18 +241,19 @@ services:
       - influxdb
 
   # ==========================================================================
-  # Portainer CE — Docker Container Management UI
+  # Dockhand — Lightweight Docker Container Management UI
   # ==========================================================================
 
-  portainer:
-    image: portainer/portainer-ce:lts
+  dockhand:
+    image: fnsys/dockhand:latest
     restart: unless-stopped
     ports:
-      - "9443:9443"
-      - "9000:9000"
+      - "3007:3000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - portainer_data:/data
+      - dockhand_data:/app/data
+    environment:
+      - BASE_PATH=/dockhand
 
   caddy:
     image: caddy:latest
@@ -276,4 +277,4 @@ volumes:
   influxdb_data:
   directus_uploads:
   sbv_data:
-  portainer_data:
+  dockhand_data:

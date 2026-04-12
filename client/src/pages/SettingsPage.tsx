@@ -556,7 +556,7 @@ function StorageSection() {
                 ["lancedb_data", "Py MCP Server", "/data/lancedb"],
                 ["ollama_models", "Ollama", "/root/.ollama"],
                 ["sbv_data", "SBV", "/data"],
-                ["portainer_data", "Portainer", "/data"],
+                ["dockhand_data", "Dockhand", "/app/data"],
                 ["directus_uploads", "Directus", "/directus/uploads"],
                 ["influxdb_data", "InfluxDB", "/var/lib/influxdb2"],
                 ["caddy_data", "Caddy", "/data"],
@@ -626,10 +626,10 @@ function ServicesSection() {
       port: 8180,
     },
     {
-      name: "Portainer",
-      url: "http://localhost:9000",
-      description: "Docker container management (also embedded in Containers page)",
-      port: 9000,
+      name: "Dockhand",
+      url: "http://localhost:3007",
+      description: "Docker container management — real-time controls, logs, metrics, vuln scanning (also embedded in Containers page)",
+      port: 3007,
     },
     {
       name: "SBV (SMS Viewer)",
@@ -713,7 +713,7 @@ function GeneralSection() {
             ["Architecture", "AI DIAL Gateway + 3 MCP Servers (TS, Py, JS)"],
             ["Evidence Pipeline", "SHA-256 → DuckDB → PostgreSQL → LanceDB → Neo4j"],
             ["Auth Provider", "Keycloak OIDC (http://localhost:8180)"],
-            ["Container Management", "Portainer CE (embedded in Containers page)"],
+            ["Container Management", "Dockhand (embedded in Containers page)"],
             ["Object Storage", "Cloudflare R2 (S3-compatible) via DIAL Core"],
             ["Current Phase", "A — Foundation & Storage Tools"],
           ].map(([label, value]) => (

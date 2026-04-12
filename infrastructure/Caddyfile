@@ -17,10 +17,10 @@
 		reverse_proxy sbv:8081
 	}
 
-	# Portainer — Docker container management UI
-	handle /portainer/* {
-		uri strip_prefix /portainer
-		reverse_proxy portainer:9000
+	# Dockhand — Docker container management UI
+	handle /dockhand/* {
+		uri strip_prefix /dockhand
+		reverse_proxy dockhand:3000
 	}
 
 	# Default: route everything to DIAL Core

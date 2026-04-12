@@ -4,6 +4,7 @@ import {
   MessageSquare,
   FileSearch,
   Smartphone,
+  Container,
   Settings,
   Shield,
   ExternalLink,
@@ -15,6 +16,7 @@ const navItems = [
   { path: "/evidence", label: "Evidence", icon: FileSearch },
   { path: "/conversations", label: "Conversations", icon: MessageSquare },
   { path: "/sbv", label: "SMS Viewer", icon: Smartphone },
+  { path: "/containers", label: "Containers", icon: Container },
   { path: "/settings", label: "Settings", icon: Settings },
 ];
 

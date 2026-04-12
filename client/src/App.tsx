@@ -5,6 +5,7 @@ import {
   EvidencePage,
   ConversationsPage,
   SbvViewerPage,
+  ContainersPage,
   SettingsPage,
 } from "@/pages";
 import "./index.css";
@@ -17,6 +18,7 @@ function App() {
         <Route path="/evidence" component={EvidencePage} />
         <Route path="/conversations" component={ConversationsPage} />
         <Route path="/sbv" component={SbvViewerPage} />
+        <Route path="/containers" component={ContainersPage} />
         <Route path="/settings" component={SettingsPage} />
         <Route>
           <div className="flex items-center justify-center h-full">
