@@ -1,7 +1,5 @@
 # AI DIAL Reverse Proxy
-# Provides HTTPS termination + basic auth in front of DIAL services
-#
-# Provides HTTPS termination in front of DIAL services
+# Provides HTTPS termination + routing in front of DIAL services
 :80 {
 	# DIAL Chat UI
 	handle /chat/* {
@@ -17,6 +15,12 @@
 	handle /sbv/* {
 		uri strip_prefix /sbv
 		reverse_proxy sbv:8081
+	}
+
+	# Portainer — Docker container management UI
+	handle /portainer/* {
+		uri strip_prefix /portainer
+		reverse_proxy portainer:9000
 	}
 
 	# Default: route everything to DIAL Core

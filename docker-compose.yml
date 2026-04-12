@@ -240,6 +240,20 @@ services:
     depends_on:
       - influxdb
 
+  # ==========================================================================
+  # Portainer CE — Docker Container Management UI
+  # ==========================================================================
+
+  portainer:
+    image: portainer/portainer-ce:lts
+    restart: unless-stopped
+    ports:
+      - "9443:9443"
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+
   caddy:
     image: caddy:latest
     restart: always
@@ -262,3 +276,4 @@ volumes:
   influxdb_data:
   directus_uploads:
   sbv_data:
+  portainer_data:
