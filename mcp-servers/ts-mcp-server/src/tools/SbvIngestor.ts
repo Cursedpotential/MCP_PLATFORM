@@ -23,6 +23,7 @@ import { DuckDbVault } from './DuckDbVault.js';
 import { PostgresWriter } from './PostgresWriter.js';
 import { SbvClient, SbvMessage, SbvCall, SbvConversation } from './SbvClient.js';
 import { NormalizedMessage } from './SmsXmlParser.js';
+import { CALL_TYPE_LABELS } from './constants.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -285,7 +286,7 @@ export class SbvIngestor {
           recipient,
           raw_address: msg.address || '',
           contact_name: msg.contact_name || 'Unknown',
-          record_type: msg.ct_t || hasParts ? 'mms' : 'message',
+          record_type: (msg.ct_t || hasParts) ? 'mms' : 'message',
           raw_data: JSON.stringify(msg),
           type_code: String(msg.type),
           status_code: String(msg.status),
@@ -298,15 +299,6 @@ export class SbvIngestor {
     }
 
     // Calls → NormalizedMessage (same pattern as SmsXmlParser)
-    const callTypes: Record<number, string> = {
-      1: 'Incoming',
-      2: 'Outgoing',
-      3: 'Missed',
-      4: 'Voicemail',
-      5: 'Rejected',
-      6: 'Refused_List',
-    };
-
     for (const call of calls) {
       const timestamp = this.parseTimestamp(call.date);
       const contactLabel = call.contact_name || call.number || 'Unknown';
@@ -314,7 +306,7 @@ export class SbvIngestor {
 
       const sender = isOutgoing ? 'Me' : contactLabel;
       const recipient = isOutgoing ? contactLabel : 'Me';
-      const label = callTypes[call.type] ?? 'Unknown';
+      const label = CALL_TYPE_LABELS[String(call.type)] ?? 'Unknown';
       let text = `${label} Call with ${contactLabel} (Duration: ${call.duration}s)`;
 
       // Forensic blocking flags (same as SmsXmlParser)

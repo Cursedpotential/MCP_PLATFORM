@@ -1,6 +1,7 @@
 import { createReadStream } from 'fs';
 import { createInterface } from 'readline';
 import { XMLParser } from 'fast-xml-parser';
+import { CALL_TYPE_LABELS } from './constants.js';
 
 export interface NormalizedMessage {
   text: string;
@@ -126,16 +127,6 @@ export class SmsXmlParser {
       let sender = '';
       let recipient = '';
 
-      // Call type labels — defined here so they're available for result_label in the return
-      const callTypes: Record<string, string> = {
-        "1": "Incoming",
-        "2": "Outgoing",
-        "3": "Missed",
-        "4": "Voicemail",
-        "5": "Rejected",     // FORENSIC: Actively rejected
-        "6": "Refused_List"  // FORENSIC: Number on block list
-      };
-
       if (isCall) {
         // Handle Call Log Schema including Forensic Block Indicators
         const duration = data['@_duration'] || '0';
@@ -147,7 +138,7 @@ export class SmsXmlParser {
         if (type === '6') blockEvidence.push("Number on refuse/block list");
         if (type === '2' && duration === '0') blockEvidence.push("Outgoing call with 0 duration - did not connect");
 
-        textContent = `${callTypes[type] || 'Unknown'} Call with ${contactName !== 'Unknown' ? contactName : address} (Duration: ${duration}s)`;
+        textContent = `${CALL_TYPE_LABELS[type] || 'Unknown'} Call with ${contactName !== 'Unknown' ? contactName : address} (Duration: ${duration}s)`;
         
         if (isBlockedIndicator) {
            textContent += ` [FORENSIC FLAG: ${blockEvidence.join(', ')}]`;
@@ -199,7 +190,7 @@ export class SmsXmlParser {
           status_code: this.optField(data['@_st']),
           read_status: this.optField(data['@_read']),
           duration_seconds: isCall ? this.optField(data['@_duration']) : undefined,
-          result_label: isCall ? (callTypes[type] ?? 'Unknown') : undefined,
+          result_label: isCall ? (CALL_TYPE_LABELS[type] ?? 'Unknown') : undefined,
           message_box: this.optField(data['@_msg_box']),
           has_attachments: parsed.mms ? hasAttachments : undefined,
           attachment_count: parsed.mms ? attachmentParts.length : undefined,
