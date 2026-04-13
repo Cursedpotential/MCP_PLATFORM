@@ -1,7 +1,5 @@
 # AI DIAL Reverse Proxy
-# Provides HTTPS termination + basic auth in front of DIAL services
-#
-# Provides HTTPS termination in front of DIAL services
+# Provides HTTPS termination + routing in front of DIAL services
 :80 {
 	# DIAL Chat UI
 	handle /chat/* {
@@ -11,6 +9,18 @@
 	# DIAL Core API
 	handle /api/* {
 		reverse_proxy core:8080
+	}
+
+	# SBV — SMS Backup Viewer web UI
+	handle /sbv/* {
+		uri strip_prefix /sbv
+		reverse_proxy sbv:8081
+	}
+
+	# Dockhand — Docker container management UI
+	handle /dockhand/* {
+		uri strip_prefix /dockhand
+		reverse_proxy dockhand:3000
 	}
 
 	# Default: route everything to DIAL Core

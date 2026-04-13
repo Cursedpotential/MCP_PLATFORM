@@ -1,6 +1,7 @@
 import { createReadStream } from 'fs';
 import { createInterface } from 'readline';
 import { XMLParser } from 'fast-xml-parser';
+import { CALL_TYPE_LABELS } from './constants.js';
 
 export interface NormalizedMessage {
   text: string;
@@ -10,8 +11,17 @@ export interface NormalizedMessage {
     recipient: string;
     raw_address: string;
     contact_name: string;
-    record_type: 'call' | 'message';
+    record_type: 'call' | 'message' | 'mms';
     raw_data: string;
+    // Optional fields extracted from raw XML — only present when available
+    type_code?: string;        // @_type from XML (1=received/incoming, 2=sent/outgoing, etc.)
+    status_code?: string;      // @_st (SMS delivery status code)
+    read_status?: string;      // @_read (1=read, 0=unread)
+    duration_seconds?: string; // @_duration (calls only)
+    result_label?: string;     // Human-readable call result (calls only)
+    message_box?: string;      // @_msg_box (1=inbox, 2=sent, 3=draft, 4=outbox)
+    has_attachments?: boolean; // Whether MMS record has attachment parts
+    attachment_count?: number; // Number of MMS attachment parts
   };
 }
 
@@ -83,6 +93,14 @@ export class SmsXmlParser {
   }
 
   /**
+   * Returns String(value) when value is not undefined, otherwise returns undefined.
+   * Used when mapping optional XML attribute values to metadata fields.
+   */
+  private optField(value: unknown): string | undefined {
+    return value !== undefined ? String(value) : undefined;
+  }
+
+  /**
    * Converts a single raw XML block into a NormalizedMessage
    */
   private parseElementToDocument(xml: string): NormalizedMessage | null {
@@ -111,14 +129,6 @@ export class SmsXmlParser {
 
       if (isCall) {
         // Handle Call Log Schema including Forensic Block Indicators
-        const callTypes: Record<string, string> = { 
-          "1": "Incoming", 
-          "2": "Outgoing", 
-          "3": "Missed", 
-          "4": "Voicemail", 
-          "5": "Rejected",     // FORENSIC: Actively rejected
-          "6": "Refused_List"  // FORENSIC: Number on block list
-        };
         const duration = data['@_duration'] || '0';
         
         // Forensic Call Blocking Logic (Ported from ConflictAnalysisApp)
@@ -128,7 +138,7 @@ export class SmsXmlParser {
         if (type === '6') blockEvidence.push("Number on refuse/block list");
         if (type === '2' && duration === '0') blockEvidence.push("Outgoing call with 0 duration - did not connect");
 
-        textContent = `${callTypes[type] || 'Unknown'} Call with ${contactName !== 'Unknown' ? contactName : address} (Duration: ${duration}s)`;
+        textContent = `${CALL_TYPE_LABELS[type] || 'Unknown'} Call with ${contactName !== 'Unknown' ? contactName : address} (Duration: ${duration}s)`;
         
         if (isBlockedIndicator) {
            textContent += ` [FORENSIC FLAG: ${blockEvidence.join(', ')}]`;
@@ -154,6 +164,15 @@ export class SmsXmlParser {
 
       if (!textContent.trim()) return null; // Skip empty messages
 
+      // MMS attachment detection: count non-text parts
+      const mmsParts: unknown[] = !!parsed.mms && data.parts?.part
+        ? (Array.isArray(data.parts.part) ? data.parts.part : [data.parts.part])
+        : [];
+      const attachmentParts = mmsParts.filter(
+        (p: any) => p?.['@_ct'] && !p['@_ct'].startsWith('text/')
+      );
+      const hasAttachments = attachmentParts.length > 0;
+
       // Return a standard NormalizedMessage
       return {
         text: textContent.trim(),
@@ -163,9 +182,18 @@ export class SmsXmlParser {
           recipient,
           raw_address: address,
           contact_name: contactName,
-          record_type: isCall ? 'call' : 'message',
+          record_type: parsed.call ? 'call' : parsed.mms ? 'mms' : 'message',
           // We push the whole raw object into metadata so DuckDB can store it as JSON
-          raw_data: JSON.stringify(data) 
+          raw_data: JSON.stringify(data),
+          // Optional fields populated from raw XML
+          type_code: this.optField(data['@_type']),
+          status_code: this.optField(data['@_st']),
+          read_status: this.optField(data['@_read']),
+          duration_seconds: isCall ? this.optField(data['@_duration']) : undefined,
+          result_label: isCall ? (CALL_TYPE_LABELS[type] ?? 'Unknown') : undefined,
+          message_box: this.optField(data['@_msg_box']),
+          has_attachments: parsed.mms ? hasAttachments : undefined,
+          attachment_count: parsed.mms ? attachmentParts.length : undefined,
         }
       };
     } catch (error) {
