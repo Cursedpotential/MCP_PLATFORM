@@ -491,36 +491,152 @@ function createMcpServer(): Server {
 
       case "evidence_search": {
         const { query, limit, platform, case_id } = args as any;
-        // Semantic search via pgvector — requires embedding the query first
-        // For now: keyword fallback search until py-mcp-server embedding is wired
+        const maxResults = Number(limit ?? 20);
+
+        // ---------------------------------------------------------------
+        // Attempt semantic vector search via py-mcp-server
+        // Falls back to keyword search if embedding service is unavailable
+        // ---------------------------------------------------------------
+        let vectorResults: any[] | null = null;
+        try {
+          // Step 1: Embed the query
+          const embedResp = await fetch(
+            (process.env.PY_MCP_URL ?? 'http://py-mcp-server:8082') + '/mcp',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'tools/call',
+                params: {
+                  name: 'semantica_generate_embeddings',
+                  arguments: { text: query },
+                },
+                id: 1,
+              }),
+              signal: AbortSignal.timeout(15000),
+            },
+          );
+
+          if (embedResp.ok) {
+            const embedData = (await embedResp.json()) as any;
+            const embedContent = embedData?.result?.content?.[0]?.text;
+            if (embedContent) {
+              const { embedding } = JSON.parse(embedContent);
+              if (embedding && embedding.length > 0) {
+                // Step 2: Search LanceDB with the embedded query
+                const searchResp = await fetch(
+                  (process.env.PY_MCP_URL ?? 'http://py-mcp-server:8082') + '/mcp',
+                  {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      jsonrpc: '2.0',
+                      method: 'tools/call',
+                      params: {
+                        name: 'lancedb_vector_search',
+                        arguments: {
+                          collection: 'evidence_chunks',
+                          query_text: query,
+                          top_k: maxResults,
+                        },
+                      },
+                      id: 2,
+                    }),
+                    signal: AbortSignal.timeout(15000),
+                  },
+                );
+
+                if (searchResp.ok) {
+                  const searchData = (await searchResp.json()) as any;
+                  const searchContent = searchData?.result?.content?.[0]?.text;
+                  if (searchContent) {
+                    const parsed = JSON.parse(searchContent);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                      vectorResults = parsed;
+                    }
+                  }
+                }
+
+                // Step 3: Also search PostgreSQL pgvector on evidence.messages
+                if (!vectorResults || vectorResults.length === 0) {
+                  const embeddingStr = `[${embedding.join(',')}]`;
+                  try {
+                    const pgVectorSql = platform
+                      ? `SELECT id, conversation_id, sender, recipient, body, timestamp, platform, direction,
+                                1 - (embedding <=> $1::vector) AS similarity
+                         FROM evidence.messages
+                         WHERE embedding IS NOT NULL AND platform = $2
+                         ORDER BY embedding <=> $1::vector
+                         LIMIT $3`
+                      : `SELECT id, conversation_id, sender, recipient, body, timestamp, platform, direction,
+                                1 - (embedding <=> $1::vector) AS similarity
+                         FROM evidence.messages
+                         WHERE embedding IS NOT NULL
+                         ORDER BY embedding <=> $1::vector
+                         LIMIT $2`;
+                    const pgParams = platform
+                      ? [embeddingStr, platform, maxResults]
+                      : [embeddingStr, maxResults];
+                    const pgResults = await getPg().query(pgVectorSql, pgParams);
+                    if (Array.isArray(pgResults) && pgResults.length > 0) {
+                      vectorResults = pgResults as any[];
+                    }
+                  } catch (_pgVecErr) {
+                    // pgvector search failure — fall through to keyword
+                  }
+                }
+              }
+            }
+          }
+        } catch (_err) {
+          // Embedding service unavailable — fall through to keyword search
+        }
+
+        // If vector search returned results, return them
+        if (vectorResults && vectorResults.length > 0) {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                search_type: 'semantic',
+                results: vectorResults,
+                count: vectorResults.length,
+              }, null, 2),
+            }],
+          };
+        }
+
+        // ---------------------------------------------------------------
+        // Fallback: keyword search
+        // ---------------------------------------------------------------
         const sql = platform
           ? `SELECT id, conversation_id, sender, recipient, body, timestamp, platform, direction
              FROM evidence.messages
-             WHERE body_lower ILIKE $1 AND platform = $2
+             WHERE body ILIKE $1 AND platform = $2
              ORDER BY timestamp DESC LIMIT $3`
           : `SELECT id, conversation_id, sender, recipient, body, timestamp, platform, direction
              FROM evidence.messages
-             WHERE body_lower ILIKE $1
+             WHERE body ILIKE $1
              ORDER BY timestamp DESC LIMIT $2`;
         const params = platform
-          ? [`%${query}%`, platform, Number(limit ?? 20)]
-          : [`%${query}%`, Number(limit ?? 20)];
+          ? [`%${query}%`, platform, maxResults]
+          : [`%${query}%`, maxResults];
         try {
           const results = await getPg().query(sql, params);
-          return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                search_type: 'keyword',
+                results,
+                count: Array.isArray(results) ? results.length : 0,
+                note: 'Vector search unavailable — using keyword fallback',
+              }, null, 2),
+            }],
+          };
         } catch (err: any) {
-          // Fallback: body column without body_lower
-          const fallbackSql = platform
-            ? `SELECT id, conversation_id, sender, recipient, body, timestamp, platform, direction
-               FROM evidence.messages
-               WHERE body ILIKE $1 AND platform = $2
-               ORDER BY timestamp DESC LIMIT $3`
-            : `SELECT id, conversation_id, sender, recipient, body, timestamp, platform, direction
-               FROM evidence.messages
-               WHERE body ILIKE $1
-               ORDER BY timestamp DESC LIMIT $2`;
-          const results = await getPg().query(fallbackSql, params);
-          return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+          return { content: [{ type: "text", text: JSON.stringify({ error: err.message }) }] };
         }
       }
 
