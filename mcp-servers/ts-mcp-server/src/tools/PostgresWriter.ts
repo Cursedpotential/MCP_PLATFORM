@@ -168,6 +168,12 @@ export class PostgresWriter {
       throw new Error(`[SECURITY] Embedding update not allowed on table: ${tableName}`);
     }
 
+    // Whitelist of allowed status field names to prevent SQL injection
+    const ALLOWED_STATUS_FIELDS = ["embedding_status"];
+    if (statusField && !ALLOWED_STATUS_FIELDS.includes(statusField)) {
+      throw new Error(`[SECURITY] Status field '${statusField}' is not in the allowed list`);
+    }
+
     const embeddingStr = `[${embedding.join(",")}]`;
 
     try {

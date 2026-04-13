@@ -10,7 +10,7 @@
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS evidence.message_chunks (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
     message_id UUID NOT NULL REFERENCES evidence.messages(id) ON DELETE CASCADE,
     ingestion_id TEXT NOT NULL,
     chunk_text TEXT NOT NULL,
