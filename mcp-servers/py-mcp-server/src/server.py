@@ -360,10 +360,15 @@ def lancedb_vector_search(
     query = table.search(query_embedding).limit(top_k)
 
     # Apply metadata filters if provided (e.g., platform filter)
+    # Whitelist of allowed filter columns to prevent injection attacks
+    allowed_filter_columns = {"platform", "sender", "recipient", "conversation_id"}
     if filters:
         for key, value in filters.items():
-            # LanceDB filter syntax: column == 'value'
-            query = query.where(f"{key} = '{value}'")
+            if key not in allowed_filter_columns:
+                continue  # Skip unknown filter columns
+            # Escape single quotes in value to prevent SQL injection
+            escaped_value = str(value).replace("'", "''")
+            query = query.where(f"{key} = '{escaped_value}'")
 
     results = query.to_pandas()
     return results.to_json(orient="records", indent=2, default_handler=str)
