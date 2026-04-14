@@ -9,6 +9,25 @@
 -- Depends on: 001 (pgcrypto), extensions (vector, uuid-ossp)
 -- =============================================================================
 
+-- =============================================================================
+-- COMMON TRIGGER FUNCTION
+-- =============================================================================
+-- Define update_updated_at() here so the migration is self-contained and does
+-- not depend on the Docker init SQL. Using CREATE OR REPLACE ensures this is
+-- idempotent and won't fail if the function already exists.
+
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- =============================================================================
+-- MESSAGE CHUNKS TABLE
+-- =============================================================================
+
 CREATE TABLE IF NOT EXISTS evidence.message_chunks (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
     message_id UUID NOT NULL REFERENCES evidence.messages(id) ON DELETE CASCADE,
