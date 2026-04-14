@@ -525,6 +525,16 @@ function createMcpServer(): Server {
               const { embedding } = JSON.parse(embedContent);
               if (embedding && embedding.length > 0) {
                 // Step 2: Search LanceDB with the embedded query
+                // Build LanceDB search arguments with optional platform filter
+                const lanceDbArgs: Record<string, unknown> = {
+                  collection: 'evidence_chunks',
+                  query_text: query,
+                  top_k: maxResults,
+                };
+                if (platform) {
+                  lanceDbArgs.filters = { platform };
+                }
+
                 const searchResp = await fetch(
                   (process.env.PY_MCP_URL ?? 'http://py-mcp-server:8082') + '/mcp',
                   {
@@ -535,11 +545,7 @@ function createMcpServer(): Server {
                       method: 'tools/call',
                       params: {
                         name: 'lancedb_vector_search',
-                        arguments: {
-                          collection: 'evidence_chunks',
-                          query_text: query,
-                          top_k: maxResults,
-                        },
+                        arguments: lanceDbArgs,
                       },
                       id: 2,
                     }),
@@ -551,7 +557,12 @@ function createMcpServer(): Server {
                   const searchData = (await searchResp.json()) as any;
                   const searchContent = searchData?.result?.content?.[0]?.text;
                   if (searchContent) {
-                    const parsed = JSON.parse(searchContent);
+                    let parsed = JSON.parse(searchContent);
+                    // Safety net: client-side platform filtering in case LanceDB
+                    // returns unfiltered results (defensive programming)
+                    if (platform && Array.isArray(parsed)) {
+                      parsed = parsed.filter((r: any) => r.platform === platform);
+                    }
                     if (Array.isArray(parsed) && parsed.length > 0) {
                       vectorResults = parsed;
                     }
