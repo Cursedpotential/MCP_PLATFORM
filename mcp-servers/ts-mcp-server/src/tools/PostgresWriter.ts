@@ -24,6 +24,7 @@ const WRITABLE_TABLES = [
   "evidence.analysis_runs",
   "evidence.behavioral_findings",
   "evidence.tool_execution_log",
+  "evidence.message_chunks",
 ] as const;
 
 const TableNameSchema = z.enum(WRITABLE_TABLES);
@@ -40,6 +41,7 @@ const EVIDENCE_HASH_REQUIRED: Record<string, string> = {
   "evidence.message_analysis": "source_hash",
   "evidence.behavioral_findings": "source_hash",
   "evidence.tool_execution_log": "input_hash",
+  "evidence.message_chunks": "chunk_hash",
   "app.forensic_results": "source_hash",
 };
 
@@ -143,6 +145,52 @@ export class PostgresWriter {
       // Sanitize error — don't expose internal schema details
       console.error(`[PostgresWriter] Query failed:`, error);
       throw new Error(`Query failed: ${error.code || "UNKNOWN"}`);
+    }
+  }
+
+  /**
+   * Update a record's embedding column by ID.
+   * Restricted to specific embedding update patterns for safety.
+   */
+  async updateEmbedding(
+    tableName: string,
+    id: string,
+    embedding: number[],
+    statusField?: string,
+  ) {
+    if (!this.client) {
+      throw new Error("DATABASE_URL not configured for PostgreSQL.");
+    }
+
+    // Only allow embedding updates on known tables
+    const EMBEDDABLE_TABLES = ["evidence.messages", "evidence.message_chunks"];
+    if (!EMBEDDABLE_TABLES.includes(tableName)) {
+      throw new Error(`[SECURITY] Embedding update not allowed on table: ${tableName}`);
+    }
+
+    // Whitelist of allowed status field names to prevent SQL injection
+    const ALLOWED_STATUS_FIELDS = ["embedding_status"];
+    if (statusField && !ALLOWED_STATUS_FIELDS.includes(statusField)) {
+      throw new Error(`[SECURITY] Status field '${statusField}' is not in the allowed list`);
+    }
+
+    const embeddingStr = `[${embedding.join(",")}]`;
+
+    try {
+      if (statusField) {
+        await this.client.unsafe(
+          `UPDATE ${tableName} SET embedding = $1::vector, ${statusField} = 'completed', updated_at = NOW() WHERE id = $2`,
+          [embeddingStr, id],
+        );
+      } else {
+        await this.client.unsafe(
+          `UPDATE ${tableName} SET embedding = $1::vector, updated_at = NOW() WHERE id = $2`,
+          [embeddingStr, id],
+        );
+      }
+    } catch (error: any) {
+      console.error(`[PostgresWriter] Embedding update failed for ${tableName}:`, error);
+      throw new Error(`Embedding update failed: ${error.message}`);
     }
   }
 }
