@@ -311,3 +311,73 @@ This register records architectural decisions (ADRs) made for the MCP Platform p
 ---
 
 *Last updated: see git log*
+
+---
+
+## ADR-027: Open Structured Memory as Canonical Memory System
+
+**Date:** 2026-04-20
+**Status:** Accepted
+**Needs owner approval?** No — architectural decision made by owner
+**Decision:** Open Structured Memory (markdown files committed to the repository) is the canonical memory system for agent context persistence. Mem0 and ClaudeMem are not the primary systems and should not be relied upon as the source of truth.
+**Rationale:** MD-based memory has no API dependency, no server to be up, no MCP tool call that might fail. Every agent in every tool with filesystem access can read it. It commits with the codebase, travels with clones, and is auditable via git history. Mem0 and ClaudeMem had inconsistent retrieval — agents skipped them or read wrong results.
+**Consequences:** Memory lives in `memory/MEMORY.md` (root) and `[workdir]/memory/MEMORY.md` (per-domain). Agents must read memory files as part of mandatory session start. Agents must commit updated memory files at session end. MCP memory tool calls are supplementary, not primary.
+
+---
+
+## ADR-028: Hierarchical Memory Architecture
+
+**Date:** 2026-04-20
+**Status:** Accepted
+**Needs owner approval?** No
+**Decision:** Memory is organized as a hierarchy mirroring the directory structure. Root `memory/MEMORY.md` tracks platform-level session state. Each major subdirectory has its own `memory/MEMORY.md` tracking domain-specific state. Deeper = more specific. All use the same session log template.
+**Rationale:** A flat single memory file becomes too long and too broad for agents working in specific domains. Domain-specific memory files let a TS server agent track parser work without reading Python server history. The hierarchy prevents memory from becoming a monolithic dump that agents stop reading.
+**Consequences:** Memory files exist at: root, mcp-servers/, ts-mcp-server/, py-mcp-server/, js-mcp-server/, infrastructure/, client/, docs/. All use the same session log template. Agents commit their domain memory file plus root if platform-level decisions were made.
+
+---
+
+## ADR-029: GROUND_TRUTH.md as Mandatory First Read
+
+**Date:** 2026-04-20
+**Status:** Accepted
+**Needs owner approval?** No
+**Decision:** `GROUND_TRUTH.md` at repo root is the mandatory first read for every agent every session, after `git pull`. It is the single source of truth for current platform state — what runs, what doesn't, what's decided, what's open. All other planning documents are secondary and may be stale.
+**Rationale:** Agents were making decisions based on outdated planning documents (SPRINT_PLAN.md, IMPLEMENTATION_PHASE_PLAN.md) that referenced deprecated architecture. A single authoritative state file that Matt maintains eliminates this ambiguity.
+**Consequences:** GROUND_TRUTH.md must be kept current by Matt. When platform state changes (container starts, decision made, phase completes), GROUND_TRUTH.md is updated first. Agents that act on information from other planning docs without cross-checking GROUND_TRUTH.md are in violation of protocol.
+
+---
+
+## ADR-030: Platform Components Are Peers — No Orchestration Hierarchy
+
+**Date:** 2026-04-20
+**Status:** Accepted
+**Needs owner approval?** No
+**Decision:** Agno, n8n, Directus, and the MCP servers (TS/Py/JS) are peers. No single component orchestrates all others. Agno is the future orchestration glue for intelligent agent workflows but is not yet deployed and does not have authority over other components.
+**Rationale:** Early design documents implied Agno was the top-level orchestrator, leading agents to design integrations that assumed Agno-primary hierarchy. This created dependency debt on a component that isn't deployed. The correct model is: each component has a defined responsibility, they coordinate through well-defined interfaces, and no component is subordinate to another.
+**Consequences:** Agent prompts and documentation must not depict Agno as a controller over other components. Architecture diagrams must show peers. When Agno is eventually deployed, its integration must be designed through interfaces, not by modifying other components to serve it.
+
+---
+
+## ADR-031: Two Access Surfaces — MCP External and Internal API Direct
+
+**Date:** 2026-04-20
+**Status:** Accepted
+**Needs owner approval?** No
+**Decision:** The platform exposes two access surfaces: (1) MCP surface — external tools (OpenWebUI, LibreChat, Claude Code, OpenCode) connect via MCP protocol through Context Forge and Keycloak; (2) Internal API surface — Agno, n8n, and Directus connect directly to internal APIs without the MCP hop. The internal API is the canonical interface. MCP tools are thin wrappers over it.
+**Rationale:** Building MCP tools as the primary interface and internal APIs as an afterthought couples business logic to the protocol layer. If MCP is the wrapper, the internal API can be tested, versioned, and consumed by multiple surfaces independently. This also means internal consumers (Agno, n8n) get lower latency and richer error handling than the MCP protocol allows.
+**Consequences:** Internal API must be designed before or alongside MCP tool wrappers — not after. MCP tool implementations should be thin: validate inputs, call internal API, return result. Business logic lives in internal API handlers.
+
+---
+
+## ADR-032: OpenCode Deployment Model Is an Open Architectural Question
+
+**Date:** 2026-04-20
+**Status:** Open — awaiting owner decision
+**Needs owner approval?** Yes — decision required before any implementation
+**Decision:** The deployment model for OpenCode (server mode vs. agent mode) has not been decided. No implementation work may begin on OpenCode integration until Matt makes this decision.
+**Rationale:** Server mode and agent mode have different implications for how models are invoked, how context is managed, how cost is controlled, and how the platform integrates with OpenCode. Implementing against an assumed model and then having to reverse course wastes significant effort.
+**Consequences:** Agents must not implement any OpenCode integration. If a task touches OpenCode deployment, it must stop and flag OQ-1 as a blocker. When Matt decides, this ADR will be updated to Accepted with the chosen approach, and implementation can begin.
+
+---
+
+*Last updated: 2026-04-20*
