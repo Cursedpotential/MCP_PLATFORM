@@ -47,7 +47,7 @@
 → `docs/wiki/workflows/` — ingestion, HITL review, Pass 1 analysis
 
 ## I need to understand a decision that was made
-→ `DECISION_REGISTER_POST_DIAL.md` — ADR-001 through ADR-032
+→ `DECISION_REGISTER.md` — ADR-001 through ADR-032
 
 ## I need to write a spec before implementing
 → `docs/specs/SPEC_DRIVEN_DEVELOPMENT.md` — how to write specs
@@ -58,7 +58,7 @@
 
 ## I need the system prompt to paste into a new agent session
 → `MCP_PLATFORM_SYSTEM_PROMPT_V3.md` ← current
-→ ~~`MCP_PLATFORM_SYSTEM_PROMPT_V2.md`~~ — deprecated 2026-04-21
+→ ~~`_DEPRECATED/MCP_PLATFORM_SYSTEM_PROMPT_V2.md`~~ — deprecated 2026-04-21
 
 ---
 
@@ -72,9 +72,9 @@
 | `memory/MATT.md` | Matt reference | YES — fourth |
 | `TODO.md` | Platform tasks | YES — before starting work |
 | `MCP_PLATFORM_SYSTEM_PROMPT_V3.md` | System prompt — current | Paste into agent |
-| ~~`MCP_PLATFORM_SYSTEM_PROMPT_V2.md`~~ | ~~System prompt~~ | ⛔ Deprecated — use V3 |
+| ~~`_DEPRECATED/MCP_PLATFORM_SYSTEM_PROMPT_V2.md`~~ | ~~System prompt~~ | ⛔ Deprecated — use V3 |
 | `ORCHESTRATION_CONTRACT.md` | Agent governance | How agents/tools/CLIs are governed |
-| `DECISION_REGISTER_POST_DIAL.md` | ADR log | When making/checking decisions |
-| ~~`AGENT_HANDOFF_PROMPT_POST_DIAL.md`~~ | ~~Handoff context~~ | ⛔ Deprecated — use ORCHESTRATION_CONTRACT.md |
+| `DECISION_REGISTER.md` | ADR log | When making/checking decisions |
+| ~~`_DEPRECATED/AGENT_HANDOFF_PROMPT_POST_DIAL.md`~~ | ~~Handoff context~~ | ⛔ Deprecated — use ORCHESTRATION_CONTRACT.md |
 | `PARITY_MATRIX.md` | Feature status | When checking what's built — verify against GROUND_TRUTH.md |
 | `docs/wiki/alpha1-inventory.md` | Alpha 1 asset catalog | Before porting anything |

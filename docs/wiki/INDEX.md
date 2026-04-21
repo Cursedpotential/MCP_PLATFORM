@@ -19,7 +19,7 @@ This wiki is the reference layer over the MCP_PLATFORM documentation tree. All a
 - [GROUND_TRUTH.md](/GROUND_TRUTH.md) — authoritative platform state: what runs, what is deprecated, what is planned
 - [MCP_PLATFORM_SYSTEM_PROMPT_V3.md](/MCP_PLATFORM_SYSTEM_PROMPT_V3.md) — current system prompt for development agents
 - [ORCHESTRATION_CONTRACT.md](/ORCHESTRATION_CONTRACT.md) — agent governance: change gates, approval protocol, no-stubs rule
-- [DECISION_REGISTER_POST_DIAL.md](/DECISION_REGISTER_POST_DIAL.md) — ADRs including ADR-031 (ContextForge), ADR-033 (Conductor replaces Agno+n8n)
+- [DECISION_REGISTER.md](/DECISION_REGISTER.md) — ADRs including ADR-031 (ContextForge), ADR-033 (Conductor replaces Agno+n8n)
 - [INDEX.md](/INDEX.md) — root index
 
 ### Orchestration

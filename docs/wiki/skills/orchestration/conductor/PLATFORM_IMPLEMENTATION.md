@@ -197,7 +197,7 @@ Semantica is authoritative for forensic NLP. It runs as a py-mcp-server. Conduct
 
 ## Relevant Files
 
-- `DECISION_REGISTER_POST_DIAL.md` — ADR-033
+- `DECISION_REGISTER.md` — ADR-033
 - `GROUND_TRUTH.md` — Conductor section
 - `MCP_PLATFORM_SYSTEM_PROMPT_V3.md` — Section 2.1 architecture diagram, Section 3.5 CoT
 - `ORCHESTRATION_CONTRACT.md` — agent governance, change gates

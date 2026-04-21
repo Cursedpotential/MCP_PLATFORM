@@ -99,4 +99,4 @@ The gate lifts when: a single message ingested via ContextForge completes a full
 - [OSS_REFERENCE.md](OSS_REFERENCE.md) — engine capabilities
 - [PLATFORM_IMPLEMENTATION.md](PLATFORM_IMPLEMENTATION.md) — how we implement it
 - [ECOSYSTEM.md](ECOSYSTEM.md) — tools, plugins, MCP server
-- ADR-033 in `DECISION_REGISTER_POST_DIAL.md`
+- ADR-033 in `DECISION_REGISTER.md`

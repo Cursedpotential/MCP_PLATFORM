@@ -230,15 +230,15 @@ Step 8:  Emit SESSION END block (see system prompt)
 
 ## DEPRECATED STALE PLANNING DOCUMENTS
 
-> The following documents were written before DIAL Core deprecation and the Conductor OSS pivot (ADR-033).
-> They contain architectural references that are now incorrect. **GROUND_TRUTH.md supersedes all of them.**
-> Do NOT update these docs. Do NOT follow rules in them that conflict with GROUND_TRUTH.md.
-> They are preserved for historical reference only.
+> All documents listed below have been moved to `_DEPRECATED/`. They contain architecture that predates ADR-033 (Conductor) and ADR-031 (ContextForge). **Do not follow any instruction in them that conflicts with GROUND_TRUTH.md.**
 
-| Stale Document | What's Wrong |
+| Document | Superseded By |
 |---|---|
-| `POST_DIAL_MASTER_OVERVIEW.md` | References DIAL Core as operational |
-| `SPRINT_PLAN.md` | References Agno and n8n as future components; references DIAL Core |
-| `POST_DIAL_REPLACEMENT_ARCHITECTURE.md` | References Agno and n8n in replacement architecture; references DIAL Core as gateway |
-| `IMPLEMENTATION_PHASE_PLAN.md` | May reference Agno/n8n deployment phases; treat as stale |
-| `AGENT_HANDOFF_PROMPT_POST_DIAL.md` | Written post-DIAL but pre-Conductor; Agno/n8n references are stale |
+| `_DEPRECATED/POST_DIAL_MASTER_OVERVIEW.md` | `PLATFORM_OVERVIEW.md` |
+| `_DEPRECATED/POST_DIAL_REPLACEMENT_ARCHITECTURE.md` | `PLATFORM_OVERVIEW.md` |
+| `_DEPRECATED/AGENT_HANDOFF_PROMPT_POST_DIAL.md` | `ORCHESTRATION_CONTRACT.md` |
+| `_DEPRECATED/DECISION_REGISTER_POST_DIAL.md` | `DECISION_REGISTER.md` |
+| `_DEPRECATED/SPRINT_PLAN.md` | `TODO.md` + `PLATFORM_OVERVIEW.md` |
+| `_DEPRECATED/IMPLEMENTATION_PHASE_PLAN.md` | `PLATFORM_OVERVIEW.md` (phase roadmap section) |
+| `_DEPRECATED/MIGRATION_DECISIONS.md` | `DECISION_REGISTER.md` |
+| `_DEPRECATED/MCP_PLATFORM_SYSTEM_PROMPT_V2.md` | `MCP_PLATFORM_SYSTEM_PROMPT_V3.md` |

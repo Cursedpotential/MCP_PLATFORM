@@ -22,7 +22,7 @@ description: >
 - **HUMAN task bridge (OQ-C5) is unresolved** — do not implement HUMAN → review_queue wiring without design approval.
 - **No stubs** — every workflow definition must be executable, not placeholder.
 - **Workers must be idempotent** — Conductor may redeliver tasks on failure or timeout.
-- **Read the repo before theorizing** — check `GROUND_TRUTH.md` and `DECISION_REGISTER_POST_DIAL.md` before asserting architecture.
+- **Read the repo before theorizing** — check `GROUND_TRUTH.md` and `DECISION_REGISTER.md` before asserting architecture.
 
 ## First-Time Setup
 

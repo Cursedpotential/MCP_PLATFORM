@@ -70,7 +70,7 @@ This memory file tracks work in: `docs/`
 - docs/specs/
 - docs/plans/
 - docs/architecture/
-- DECISION_REGISTER_POST_DIAL.md
+- DECISION_REGISTER.md
 
 ---
 

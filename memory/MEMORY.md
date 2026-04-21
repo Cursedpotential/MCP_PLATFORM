@@ -100,7 +100,7 @@ git add memory/MEMORY.md && git commit -m "memory: session log YYYY-MM-DD [brief
 | OQ-C5 | HUMAN task → app.review_queue bridge design | HITL gate implementation in Conductor |
 | OQ-5 | Embedding model selection: which sentence-transformers model | Embedding pipeline work |
 
-**Resolved questions (see DECISION_REGISTER_POST_DIAL.md):**
+**Resolved questions (see DECISION_REGISTER.md):**
 | # | Question | Resolution |
 |---|----------|-----------|
 | OQ-3 | Agent orchestration layer | Conductor OSS — per ADR-033 |

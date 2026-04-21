@@ -34,7 +34,7 @@ The audit covered:
 
 **Status**: BLOCKED — `MCP_Tool_Platform/` is not present in this repository clone.
 
-The `AGENT_HANDOFF_PROMPT_POST_DIAL.md` and `AGENTS.md` both reference an Alpha 1 codebase at `MCP_Tool_Platform/` that contains proven implementations of the following assets:
+The `_DEPRECATED/AGENT_HANDOFF_PROMPT_POST_DIAL.md` and `AGENTS.md` both reference an Alpha 1 codebase at `MCP_Tool_Platform/` that contains proven implementations of the following assets:
 
 | Asset | Expected Alpha 1 Path |
 |-------|-----------------------|
