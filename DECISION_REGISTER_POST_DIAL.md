@@ -381,3 +381,72 @@ This register records architectural decisions (ADRs) made for the MCP Platform p
 ---
 
 *Last updated: 2026-04-20*
+
+---
+
+## ADR-033: Conductor OSS Replaces Both Agno and n8n as Single Orchestration Layer
+
+**Date:** 2026-04-21
+**Status:** Accepted
+**Needs owner approval?** No — architectural decision made by owner (Matt Salem)
+
+**Decision:** Orkes Conductor OSS (open-source, self-hosted) replaces both Agno and n8n as the single orchestration and AI agent runtime for the MCP Platform.
+
+**What is replaced:**
+- **Agno** (planned AI agent orchestration, memory, dynamic tool calling) → removed from architecture
+- **n8n** (planned deterministic workflows, visual flows, HITL approval gates) → removed from architecture
+
+**What Conductor OSS provides that covers both replacements:**
+
+*Replacing n8n (deterministic orchestration):*
+- Sequential, parallel, fork/join, switch, sub-workflow DAG execution
+- `WAIT` task with signal, duration, or datetime — event-driven workflow pausing
+- `HUMAN` task — native human-in-the-loop approval gate
+- `FORK_JOIN_DYNAMIC` — runtime fan-out/fan-in for parallel evidence processing
+- Retry, timeout, compensation task handling built-in
+- REST API and UI for monitoring and manual task intervention
+
+*Replacing Agno (AI agent orchestration):*
+- 12 LLM providers in OSS: OpenAI, Anthropic, Google Vertex AI, Azure OpenAI, AWS Bedrock, Mistral, Cohere, Grok, Perplexity, HuggingFace, Ollama, Stability AI
+- `LLM_CHAT_COMPLETE` — multi-turn conversational AI with tool calling
+- `LLM_TEXT_COMPLETE`, `LLM_GENERATE_EMBEDDINGS`, `LLM_INDEX_TEXT`
+- Full RAG pipeline: `LLM_STORE_EMBEDDINGS`, `LLM_SEARCH_INDEX`, `LLM_SEARCH_EMBEDDINGS`, `LLM_GET_EMBEDDINGS`
+- Vector DB support: Pinecone, Postgres pgvector, MongoDB Atlas
+- `LIST_MCP_TOOLS` — introspect any MCP server at runtime
+- `CALL_MCP_TOOL` — call any tool on TS/Py/JS MCP servers directly from workflow steps
+
+**Infrastructure requirements (self-hosted):**
+- JVM runtime (Conductor server)
+- Redis (task queue and state)
+- Elasticsearch or Postgres backend (workflow metadata)
+- CLI: `npm install -g @conductor-oss/conductor-cli`
+- Local dev: `conductor server start`
+
+**CONDUCTOR GATE (hard stop — non-negotiable):**
+> Conductor integration does NOT begin until the first successful end-to-end ingest test passes.
+> The gate condition: one evidence file fully ingested → hashed → stored → retrievable.
+> This gate replaces the former AGNO GATE from ADR-030.
+
+**What remains unchanged:**
+- Context Forge: MCP gateway layer (ADR-031) — unchanged
+- CopilotKit: HITL React UI (ADR-026) — unchanged (Conductor `HUMAN` tasks signal it)
+- Directus: Data/admin surface (ADR-021) — unchanged
+- Internal API First rule (ADR-031) — unchanged; Conductor workers call internal APIs
+- Two access surfaces (ADR-031) — unchanged; Conductor is an internal consumer, not an MCP surface
+
+**Open Architectural Questions created by this decision:**
+- OQ-C1: Conductor worker deployment — containerized workers vs. local process workers
+- OQ-C2: Conductor UI access — internal only vs. Keycloak-gated external
+- OQ-C3: Conductor backend — Elasticsearch vs. Postgres (prefer Postgres to reduce infrastructure)
+
+**Do not implement any Conductor integration until:**
+1. CONDUCTOR GATE passes (first end-to-end ingest)
+2. Matt says "approved — proceed [Conductor worker: service-name]" for each worker
+
+**Consequences:**
+- Remove all Agno references from GROUND_TRUTH.md, system prompt, and planning docs
+- Remove all n8n references from GROUND_TRUTH.md, system prompt, and planning docs
+- Add Conductor OSS to GROUND_TRUTH.md PLATFORM COMPONENTS table with status: NOT DEPLOYED — gated behind first ingest
+- Stale planning docs (POST_DIAL_MASTER_OVERVIEW.md, SPRINT_PLAN.md, POST_DIAL_REPLACEMENT_ARCHITECTURE.md) that reference Agno/n8n or DIAL Core as operational — add deprecation notice headers
+
+*Last updated: 2026-04-21*

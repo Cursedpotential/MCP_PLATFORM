@@ -57,7 +57,8 @@
 → `docs/wiki/README.md` — wiki master index (produced by documentation agent)
 
 ## I need the system prompt to paste into a new agent session
-→ `MCP_PLATFORM_SYSTEM_PROMPT_V2.md`
+→ `MCP_PLATFORM_SYSTEM_PROMPT_V3.md` ← current
+→ ~~`MCP_PLATFORM_SYSTEM_PROMPT_V2.md`~~ — deprecated 2026-04-21
 
 ---
 
@@ -70,8 +71,10 @@
 | `memory/MEMORY.md` | Session log | YES — third |
 | `memory/MATT.md` | Matt reference | YES — fourth |
 | `TODO.md` | Platform tasks | YES — before starting work |
-| `MCP_PLATFORM_SYSTEM_PROMPT_V2.md` | System prompt | Paste into agent |
+| `MCP_PLATFORM_SYSTEM_PROMPT_V3.md` | System prompt — current | Paste into agent |
+| ~~`MCP_PLATFORM_SYSTEM_PROMPT_V2.md`~~ | ~~System prompt~~ | ⛔ Deprecated — use V3 |
+| `ORCHESTRATION_CONTRACT.md` | Agent governance | How agents/tools/CLIs are governed |
 | `DECISION_REGISTER_POST_DIAL.md` | ADR log | When making/checking decisions |
-| `AGENT_HANDOFF_PROMPT_POST_DIAL.md` | Handoff context | When taking over mid-project |
-| `PARITY_MATRIX.md` | Feature status | When checking what's built |
+| ~~`AGENT_HANDOFF_PROMPT_POST_DIAL.md`~~ | ~~Handoff context~~ | ⛔ Deprecated — use ORCHESTRATION_CONTRACT.md |
+| `PARITY_MATRIX.md` | Feature status | When checking what's built — verify against GROUND_TRUTH.md |
 | `docs/wiki/alpha1-inventory.md` | Alpha 1 asset catalog | Before porting anything |

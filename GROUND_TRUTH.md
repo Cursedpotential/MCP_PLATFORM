@@ -126,8 +126,37 @@ These are undecided. Agents must NOT make assumptions or implement solutions for
 | Agno deployment: when and how to introduce it | Agno is the future orchestration glue — premature deployment creates dependency debt |
 | n8n workflow triggers: webhook vs polling vs event bus | Affects how HITL gates are implemented in practice |
 | Embedding model selection: which sentence-transformers model | Affects search quality and local resource requirements |
+| Planner agent design | Conductor executes; something must decide which workflow to run. Agno was the planned planner. No replacement decided. Gated behind first Conductor workflow running end-to-end. |
+| /api/chat endpoint design | Needs to route: plain LLM (LiteLLM), tool calls (ContextForge MCP), workflow control (Conductor). Request/response schema not yet defined. |
+| Conductor HUMAN task ↔ ReviewQueue bridge | When a Conductor HUMAN task fires, it must sync with `app.review_queue` and notify the UI. Mechanism not yet designed. |
 
 When you encounter one of these in implementation, STOP. Flag it. Ask Matt. Do not decide unilaterally.
+
+---
+
+## SEMANTICA
+
+Semantica is a pivotal component of the forensic intelligence layer. It is the NLP/AI engine for:
+- Named entity extraction (`semantica_extract_entities`)
+- Knowledge graph construction (`semantica_build_graph`)
+- Temporal fact extraction (`semantica_extract_temporal_facts`)
+- Conflict/contradiction detection (`semantica_detect_conflicts`)
+- Embedding generation (`semantica_generate_embeddings`)
+- Evidence provenance tracking (`semantica_track_provenance`)
+
+Semantica tools live in `py-mcp-server`. They are called by the TS server (Pass1Runner) and will be called by Conductor workers.
+
+**Rule for agents**: Treat Semantica tools as authoritative. Do not rewrite their interfaces. Do not stub their implementations. If a Semantica tool is missing or broken, flag it — do not work around it.
+
+---
+
+## UNKNOWN COMPONENTS
+
+This platform contains more components, tools, and integrations than any single document captures. When an agent encounters a reference to an unknown component:
+
+1. STOP
+2. Emit: `UNKNOWN_COMPONENT: [name] — encountered at [file:line]. No documentation found.`
+3. Ask Matt. Do not assume. Do not infer. Do not implement.
 
 ---
 
@@ -196,3 +225,20 @@ Step 8:  Emit SESSION END block (see system prompt)
 4. State out loud: what you read, what phase you understand you're in, what specific task Matt has given you
 5. If Matt has NOT given you a specific task yet, ask: "What are we working on today?"
 6. Do not generate any code until you have completed steps 1–5 and have an explicit approved task
+
+---
+
+## DEPRECATED STALE PLANNING DOCUMENTS
+
+> The following documents were written before DIAL Core deprecation and the Conductor OSS pivot (ADR-033).
+> They contain architectural references that are now incorrect. **GROUND_TRUTH.md supersedes all of them.**
+> Do NOT update these docs. Do NOT follow rules in them that conflict with GROUND_TRUTH.md.
+> They are preserved for historical reference only.
+
+| Stale Document | What's Wrong |
+|---|---|
+| `POST_DIAL_MASTER_OVERVIEW.md` | References DIAL Core as operational |
+| `SPRINT_PLAN.md` | References Agno and n8n as future components; references DIAL Core |
+| `POST_DIAL_REPLACEMENT_ARCHITECTURE.md` | References Agno and n8n in replacement architecture; references DIAL Core as gateway |
+| `IMPLEMENTATION_PHASE_PLAN.md` | May reference Agno/n8n deployment phases; treat as stale |
+| `AGENT_HANDOFF_PROMPT_POST_DIAL.md` | Written post-DIAL but pre-Conductor; Agno/n8n references are stale |

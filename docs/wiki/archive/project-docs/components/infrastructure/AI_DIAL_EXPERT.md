@@ -1,3 +1,10 @@
+> **ARCHIVED — 2026-04-21**
+> **Reason**: AI DIAL Core, DIAL Chat, and related DIAL stack components were deprecated per ADR-033 (April 2026). DIAL was never operational in MCP_PLATFORM. The gateway role is fulfilled by ContextForge (ADR-031). The orchestration role is fulfilled by Conductor OSS (ADR-033). This file is preserved in its entirety for historical reference.
+> **Do not edit. Do not reference in active architecture docs.**
+> **Superseded by**: `docs/wiki/skills/orchestration/conductor/`
+
+---
+
 ---
 name: ai-dial-expert
 description: >

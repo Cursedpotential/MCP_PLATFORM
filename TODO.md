@@ -42,7 +42,7 @@
 | PLAT-002 | Context management architecture + TODO/INDEX hierarchy | IN_PROGRESS | YES | — | Being built now |
 | PLAT-003 | Wiki knowledge base build-out | READY | NO | PLAT-001 | See HANDOFF_WIKI_AND_DOCS.md |
 | PLAT-004 | Document health audit + archive sort | READY | NO | — | See HANDOFF_CONTEXT_AND_ARCHIVE.md |
-| PLAT-005 | ADR register updated through ADR-032 | IN_PROGRESS | YES | — | Being done this session |
+| PLAT-005 | ADR register updated through ADR-033 | DONE | YES | — | ADR-033: Conductor replaces Agno + n8n |
 | PLAT-006 | Docker Compose — verify all service definitions correct | READY | NO | — | Pre-start verification |
 | PLAT-007 | Health check endpoints on all 3 MCP servers | READY | NO | — | Phase A task |
 | PLAT-008 | Production-message-schemas.ts port + merge plan | READY | NO | PLAT-001 | Present as spec first |
@@ -56,9 +56,14 @@
 | ID | Question | Blocks |
 |----|----------|--------|
 | OQ-1 | OpenCode: server mode vs agent mode | Any OpenCode integration |
-| OQ-2 | Internal API design: REST vs GraphQL vs gRPC | Agno/n8n/Directus integration |
-| OQ-3 | Agno deployment timing | Orchestration layer work |
-| OQ-4 | n8n workflow trigger design | HITL gate implementation |
+| OQ-2 | Internal API design: REST vs GraphQL vs gRPC | Conductor workers/Directus integration |
+| ~~OQ-3~~ | ~~Agno deployment timing~~ | ⛔ CLOSED — ADR-033: Agno removed, Conductor replaces it |
+| ~~OQ-4~~ | ~~n8n workflow trigger design~~ | ⛔ CLOSED — ADR-033: n8n removed, Conductor replaces it |
+| OQ-C1 | Conductor worker deployment: containerized vs local process | Conductor deployment |
+| OQ-C2 | Conductor UI access: internal only vs Keycloak-gated | Conductor deployment |
+| OQ-C3 | Conductor backend: Elasticsearch vs Postgres | Conductor deployment |
+| OQ-C4 | /api/chat endpoint design: routing modes | client/ work |
+| OQ-C5 | Conductor HUMAN task ↔ ReviewQueue bridge design | HITL gate implementation |
 | OQ-5 | Embedding model selection | PHASE-B work |
 
 ---
