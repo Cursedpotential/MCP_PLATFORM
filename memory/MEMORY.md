@@ -28,22 +28,36 @@ git add memory/MEMORY.md && git commit -m "memory: session log YYYY-MM-DD [brief
 
 ---
 
-## ARCHITECTURE SNAPSHOT (Current — Post-DIAL)
+## ARCHITECTURE SNAPSHOT (Current — ADR-033 — updated 2026-04-21)
 
-AI DIAL Core is **deprecated and removed**. Do not reference it.
+**DIAL Core, Agno, n8n are deprecated and removed per ADR-033. Do not reference them.**
 
-**Platform peers (no hierarchy):**
+**Platform stack (ADR-033 — Conductor OSS replaces Agno + n8n):**
 | Component | Role | Status |
 |-----------|------|--------|
-| Agno | Agent orchestration, memory, intelligent workflows | NOT DEPLOYED |
-| n8n | Deterministic workflows, HITL approval gates | NOT DEPLOYED |
-| Directus | Admin/data surface, internal UI for Matt, webhooks | NOT DEPLOYED |
+| ContextForge | MCP gateway + Keycloak auth edge (ADR-031) | NOT DEPLOYED |
+| Conductor OSS | Orchestration + AI layer (replaces Agno + n8n) | NOT DEPLOYED — CONDUCTOR GATE active |
+| LiteLLM | Model proxy (14+ providers) | NOT DEPLOYED |
+| NLUX React (`@nlux/react`) | Embedded `<AiChat />` case copilot | NOT DEPLOYED |
+| CopilotKit | HITL React UI | STUB ONLY |
+| Semantica | Forensic NLP (py-mcp-server) — authoritative, do not rewrite | PARTIALLY BUILT |
 | TS MCP Server (8081) | Parsers, DuckDB, PostgreSQL writes | PARTIALLY BUILT |
 | Py MCP Server (8082) | Semantica NLP, LanceDB, Neo4j | PARTIALLY BUILT |
 | JS MCP Server (8083) | Text utilities, format handlers | PARTIALLY BUILT |
-| React + CopilotKit (3002) | HITL evidence review UI | STUB ONLY |
 | OpenWebUI / LibreChat | External chat interfaces | NOT DEPLOYED |
 | OpenCode | Flexible model coding agent | DEPLOYMENT MODEL UNDECIDED |
+
+**CONDUCTOR GATE**: Locked until first end-to-end ingest test passes. No workflow definitions committed without `// GATE-LIFTED: <date> <approver>` marker.
+
+**OQ-C5**: HUMAN task → app.review_queue bridge — unresolved.
+
+**Archived (do not use in code):**
+| Component | Archived path |
+|-----------|--------------|
+| AI DIAL Core | docs/wiki/archive/skills/infrastructure/ai-dial-core.md |
+| DIAL Chat | docs/wiki/archive/skills/frontend/dial-chat.md |
+| Agno | _DEPRECATED/ |
+| n8n | _DEPRECATED/ |
 
 **Storage tiers (in order — never skip T1):**
 - T1: DuckDB — SHA-256, UUIDv7, dedup, staging vault
@@ -82,10 +96,15 @@ AI DIAL Core is **deprecated and removed**. Do not reference it.
 | # | Question | Blocking What |
 |---|----------|---------------|
 | OQ-1 | OpenCode: server mode vs agent mode | Any OpenCode integration work |
-| OQ-2 | Internal API design: REST vs GraphQL vs gRPC | Agno/n8n/Directus integration design |
-| OQ-3 | Agno deployment timing and scope | Orchestration layer work |
-| OQ-4 | n8n workflow trigger design: webhook vs polling vs event bus | HITL gate implementation |
+| OQ-2 | Internal API design: REST vs GraphQL vs gRPC | Conductor worker ↔ tool server integration |
+| OQ-C5 | HUMAN task → app.review_queue bridge design | HITL gate implementation in Conductor |
 | OQ-5 | Embedding model selection: which sentence-transformers model | Embedding pipeline work |
+
+**Resolved questions (see DECISION_REGISTER_POST_DIAL.md):**
+| # | Question | Resolution |
+|---|----------|-----------|
+| OQ-3 | Agent orchestration layer | Conductor OSS — per ADR-033 |
+| OQ-4 | Deterministic workflow engine | Conductor OSS (replaces n8n) — per ADR-033 |
 
 ---
 
@@ -93,9 +112,12 @@ AI DIAL Core is **deprecated and removed**. Do not reference it.
 
 These are the next approved or near-approved tasks in dependency order. Do not start any task not on this list without Matt's approval.
 
-1. **VERIFY**: Confirm Facebook parser Alpha 1 source exists — read `MCP_Tool_Platform/server/mcp/loaders/` and document exact file paths and field coverage. Present findings to Matt before implementing.
-2. **VERIFY**: Confirm iMessage parser Alpha 1 source exists — same process.
+1. **VERIFY [port priority #1]**: Confirm Facebook parser Alpha 1 source exists — read `MCP_Tool_Platform/server/mcp/loaders/` and document exact file paths and field coverage. Present findings to Matt before implementing.
+2. **VERIFY [port priority #2]**: Confirm iMessage parser Alpha 1 source exists — same process.
 3. **SCHEMA PORT**: Read Alpha 1 `production-message-schemas.ts` in full, document all field definitions, present merge plan to Matt. Do not write code until approved.
+
+**Conductor gate tasks (blocked — gate not lifted):**
+- First end-to-end ingest test must pass before any Conductor workflow definition can be committed.
 
 ---
 
@@ -198,3 +220,28 @@ These are the next approved or near-approved tasks in dependency order. Do not s
 **Matt's mood/state**:
 - [brief honest note — helps next agent calibrate]
 ```
+
+---
+
+## SESSION LOG
+
+---
+
+### SESSION: 2026-04-21 (one-liner)
+- 2026-04-21 | Perplexity Computer | Conductor wiki + DIAL archive committed (e90c10d); session cheatsheet, plugin package agents (.opencode/agents/), guardrail hooks (bash + PS1), slash commands, Anti-Gravity workflows, CI workflow, memory rewrite | COMPLETE | See docs/memory/MEMORY.md for full wiki detail, mcp-servers/memory/MEMORY.md for server context
+
+---
+
+### SESSION: 2026-04-20
+Perplexity Computer — Memory hierarchy scaffolded, system prompt v2 written, GROUND_TRUTH established. See full detail in prior entries.
+
+---
+
+## SESSION LOG TEMPLATE (for coding agents — copy-paste)
+
+```
+### SESSION: YYYY-MM-DD (one-liner)
+- YYYY-MM-DD | [Agent] | [one-line summary of what changed] | [COMPLETE/PARTIAL/BLOCKED] | See [domain]/memory/MEMORY.md for full detail
+```
+
+> Full detail goes in the domain MEMORY.md. Root entry is the index — one line only.

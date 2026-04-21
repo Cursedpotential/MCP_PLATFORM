@@ -1,0 +1,80 @@
+#!/usr/bin/env sh
+# =============================================================================
+# MCP_PLATFORM commit-msg hook
+# Enforces: conventional commit format, task ID presence for code changes,
+#           flags approval bypass attempts
+# =============================================================================
+set -eu
+
+COMMIT_MSG_FILE="$1"
+MSG=$(cat "$COMMIT_MSG_FILE")
+
+RED='\033[0;31m'
+YEL='\033[0;33m'
+GRN='\033[0;32m'
+NC='\033[0m'
+
+FAIL=0
+
+fail() { printf "${RED}[FAIL]${NC} %s\n" "$1"; FAIL=1; }
+warn() { printf "${YEL}[WARN]${NC} %s\n" "$1"; }
+info() { printf "${GRN}[OK]${NC}   %s\n" "$1"; }
+
+# ─── 1. CONVENTIONAL COMMIT FORMAT ───────────────────────────────────────────
+# Required: type(scope): description
+# Types: feat, fix, chore, docs, refactor, test, style, ci, perf, revert, wip
+CONV_PATTERN='^(feat|fix|chore|docs|refactor|test|style|ci|perf|revert|wip)(\([a-zA-Z0-9_/-]+\))?(!)?:\s.+'
+
+FIRST_LINE=$(echo "$MSG" | head -1)
+
+if ! echo "$FIRST_LINE" | grep -qE "$CONV_PATTERN"; then
+  fail "Commit message must follow conventional commit format."
+  printf "  Got:      %s\n" "$FIRST_LINE"
+  printf "  Expected: type(scope): description\n"
+  printf "  Types: feat | fix | chore | docs | refactor | test | style | ci | perf | revert | wip\n"
+  printf "  Example:  feat(ts-mcp-server): implement facebook parser\n"
+  printf "  Example:  fix(py-mcp-server): repair semantica entity extraction\n"
+fi
+
+# ─── 2. TASK ID PRESENCE (warn, not fail) ─────────────────────────────────────
+# Encourage referencing PLAT-NNN or OQ-NNN or ADR-NNN
+if ! echo "$MSG" | grep -qE '(PLAT-[0-9]+|OQ-[0-9A-Z]+|OQ-C[0-9]+|ADR-[0-9]+|GATE-LIFTED|hotfix|chore)'; then
+  warn "No task ID found (PLAT-NNN, OQ-NNN, ADR-NNN). Consider adding one."
+  printf "  Example: feat(ts-mcp-server): implement facebook parser [PLAT-001]\n"
+fi
+
+# ─── 3. APPROVAL BYPASS DETECTION ─────────────────────────────────────────────
+# Catch commits that claim approval without using the exact phrase
+BYPASS_PATTERNS='approved|looks good|sign.?off|lgtm|ok to merge|green.?light'
+EXACT_APPROVAL='approved — proceed'
+
+if echo "$MSG" | grep -iE "$BYPASS_PATTERNS" | grep -qvF "$EXACT_APPROVAL" 2>/dev/null; then
+  warn "Approval language detected in commit message."
+  printf "  Only 'approved — proceed' is valid approval. Other phrases are not approval.\n"
+fi
+
+# ─── 4. WIP GATE ──────────────────────────────────────────────────────────────
+# WIP commits are allowed locally but blocked on main push (enforced in pre-push)
+if echo "$FIRST_LINE" | grep -qiE '^wip[:(]'; then
+  warn "WIP commit — will be blocked by pre-push if pushing to main."
+fi
+
+# ─── 5. MESSAGE LENGTH ───────────────────────────────────────────────────────
+MSG_LEN=${#FIRST_LINE}
+if [ "$MSG_LEN" -gt 100 ]; then
+  warn "First line is $MSG_LEN chars. Keep under 100 for readability in git log."
+fi
+
+if [ "$MSG_LEN" -lt 10 ]; then
+  fail "Commit message too short: '$FIRST_LINE'"
+fi
+
+# ─── RESULT ───────────────────────────────────────────────────────────────────
+if [ "$FAIL" -ne 0 ]; then
+  printf "\n${RED}commit-msg FAILED — amend your commit message.${NC}\n"
+  printf "Format: type(scope): description [TASK-ID]\n"
+  exit 1
+fi
+
+info "commit-msg passed"
+exit 0

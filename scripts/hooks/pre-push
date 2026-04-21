@@ -1,0 +1,164 @@
+#!/usr/bin/env sh
+# =============================================================================
+# MCP_PLATFORM pre-push hook
+# Extends the existing secret scan with: stub check, DIAL ref check,
+# CONDUCTOR GATE enforcement, and evidence data leak check
+# =============================================================================
+set -eu
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+FAIL=0
+
+RED='\033[0;31m'
+GRN='\033[0;32m'
+YEL='\033[0;33m'
+NC='\033[0m'
+
+fail() { printf "${RED}[FAIL]${NC} %s\n" "$1"; FAIL=1; }
+info() { printf "${GRN}[OK]${NC}   %s\n" "$1"; }
+warn() { printf "${YEL}[WARN]${NC} %s\n" "$1"; }
+
+echo "════════════════════════════════════════════"
+echo " MCP_PLATFORM pre-push guardrails"
+echo "════════════════════════════════════════════"
+
+# Files changed in commits being pushed (vs remote)
+remote="$1"
+url="$2"
+
+while read local_ref local_sha remote_ref remote_sha; do
+  if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+    continue  # Deleting a branch — skip
+  fi
+
+  if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+    # New branch — check all commits
+    RANGE="$local_sha"
+    CHANGED=$(git diff-tree --no-commit-id -r --name-only "$local_sha" 2>/dev/null || true)
+  else
+    RANGE="$remote_sha..$local_sha"
+    CHANGED=$(git diff --name-only "$remote_sha" "$local_sha" 2>/dev/null || true)
+  fi
+
+  if [ -z "$CHANGED" ]; then
+    info "No changed files in push range"
+    continue
+  fi
+
+  # ─── 1. SECRET SCAN (existing logic, extended) ─────────────────────────────
+  echo ""
+  echo "[ 1/5 ] Secret scan..."
+
+  check_pattern() {
+    pat=$1; label=$2
+    if git grep -nI -E "$pat" "$RANGE" -- . >/tmp/push-check.$$ 2>/dev/null; then
+      fail "Possible $label"
+      cat /tmp/push-check.$$
+    fi
+    rm -f /tmp/push-check.$$
+  }
+
+  check_pattern 'gsk_[A-Za-z0-9]+' "Groq API key"
+  check_pattern 'sk-[A-Za-z0-9]{20,}' "OpenAI-style API key"
+  check_pattern 'AIza[0-9A-Za-z\-_]{35}' "Google API key"
+  check_pattern '-----BEGIN (RSA|DSA|EC|OPENSSH|PGP) PRIVATE KEY-----' "Private key material"
+  check_pattern 'CONDUCTOR_AUTH_SECRET\s*=\s*"[^"$]{8,}"' "Hardcoded Conductor secret"
+
+  [ "$FAIL" -eq 0 ] && info "No secrets detected"
+
+  # ─── 2. STUB SCAN ──────────────────────────────────────────────────────────
+  echo ""
+  echo "[ 2/5 ] Stub scan..."
+
+  STUB_HIT=0
+  for f in $CHANGED; do
+    case "$f" in *.ts|*.tsx|*.js|*.py) ;; *) continue ;; esac
+    case "$f" in _DEPRECATED/*|docs/wiki/archive/*) continue ;; esac
+    if git show "$local_sha:$f" 2>/dev/null | \
+       grep -nE 'TODO:|FIXME:|throw new Error\("not implemented"\)|NotImplementedError|raise NotImplementedError|pass\s*#\s*stub' \
+       >/tmp/stub-push.$$ 2>/dev/null; then
+      fail "Stub in pushed file: $f"
+      cat /tmp/stub-push.$$
+      STUB_HIT=1
+    fi
+    rm -f /tmp/stub-push.$$
+  done
+  [ "$STUB_HIT" -eq 0 ] && info "No stubs detected"
+
+  # ─── 3. DIAL REFERENCE SCAN ────────────────────────────────────────────────
+  echo ""
+  echo "[ 3/5 ] DIAL reference scan (deprecated per ADR-033)..."
+
+  DIAL_HIT=0
+  for f in $CHANGED; do
+    case "$f" in *.ts|*.tsx|*.js|*.py|*.yml|*.yaml|*.json) ;; *) continue ;; esac
+    case "$f" in _DEPRECATED/*|docs/wiki/archive/*|DECISION_REGISTER*) continue ;; esac
+    if git show "$local_sha:$f" 2>/dev/null | \
+       grep -inE 'ai-dial-core|dial-chat|dial-stack|epam/ai-dial|aidial\.' \
+       >/tmp/dial-push.$$ 2>/dev/null; then
+      fail "DIAL reference in active code: $f (DIAL deprecated per ADR-033)"
+      cat /tmp/dial-push.$$
+      DIAL_HIT=1
+    fi
+    rm -f /tmp/dial-push.$$
+  done
+  [ "$DIAL_HIT" -eq 0 ] && info "No DIAL references in active code"
+
+  # ─── 4. EVIDENCE DATA LEAK CHECK ───────────────────────────────────────────
+  # Make sure no actual evidence files sneak into commits
+  echo ""
+  echo "[ 4/5 ] Evidence data leak check..."
+
+  DATA_HIT=0
+  for f in $CHANGED; do
+    case "$f" in
+      data/*|evidence/*|*.duckdb|*.sqlite|*.sqlite3|*.db)
+        fail "Evidence/data file in push: $f — never commit actual data"
+        DATA_HIT=1
+        ;;
+      *.ipynb)
+        # Check notebook for output cells with potential data
+        if git show "$local_sha:$f" 2>/dev/null | \
+           grep -c '"output_type"' >/tmp/nb-check.$$ 2>/dev/null; then
+          OUTPUT_COUNT=$(cat /tmp/nb-check.$$ 2>/dev/null || echo 0)
+          if [ "$OUTPUT_COUNT" -gt 0 ]; then
+            warn "Notebook has $OUTPUT_COUNT output cell(s): $f — strip outputs before pushing"
+          fi
+        fi
+        rm -f /tmp/nb-check.$$
+        ;;
+    esac
+  done
+  [ "$DATA_HIT" -eq 0 ] && info "No evidence data files detected"
+
+  # ─── 5. CONDUCTOR GATE SUMMARY ─────────────────────────────────────────────
+  echo ""
+  echo "[ 5/5 ] Conductor gate check..."
+
+  GATE_HIT=0
+  for f in $CHANGED; do
+    case "$f" in */workflows/*.json|*/workflow-definitions/*.json)
+      if ! git show "$local_sha:$f" 2>/dev/null | grep -q "GATE-LIFTED"; then
+        fail "Conductor workflow without GATE-LIFTED marker: $f"
+        printf "      The CONDUCTOR GATE requires first end-to-end ingest test to pass.\n"
+        printf "      Add '// GATE-LIFTED: <date> <approver>' comment to the workflow JSON.\n"
+        GATE_HIT=1
+      else
+        info "GATE-LIFTED found in: $f"
+      fi
+      ;;
+    esac
+  done
+  [ "$GATE_HIT" -eq 0 ] && info "Conductor gate check passed"
+
+done
+
+# ─── RESULT ──────────────────────────────────────────────────────────────────
+echo ""
+echo "════════════════════════════════════════════"
+if [ "$FAIL" -ne 0 ]; then
+  printf "${RED}pre-push FAILED — push blocked. Fix issues above.${NC}\n"
+  exit 1
+fi
+printf "${GRN}pre-push passed — safe to push.${NC}\n"
+exit 0
