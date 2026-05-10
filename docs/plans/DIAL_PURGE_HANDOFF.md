@@ -7,12 +7,12 @@
 
 ## Critical: Human in the loop — always
 
-**Matt (the owner) is non-technical but makes all decisions. He must be involved before anything beyond straightforward doc edits.**
+**Matt (the owner) has 15 years of IT background — DevOps and networking, not coding. He is technical and understands systems, infrastructure, and architecture at a design level. All decisions are his. Do not make code-level or architectural choices unilaterally.**
 
 Rules:
 1. **Documentation cleanup first** — Groups 1–5 below are pure find-and-replace on text files. Do those first, they do not require discussion.
-2. **Before any architecture, schema, table, logic, or infrastructure change** — stop, explain what you’re thinking in plain English, and have a discussion. Do not assume. Do not proceed on your own judgment.
-3. **Brainstorm before building** — when something is ambiguous or has multiple valid approaches, lay out the options clearly and ask. Matt may not know the technical terms but he knows what outcome he needs.
+2. **Before any architecture, schema, table, logic, or infrastructure change** — stop, explain what you’re thinking, and have a discussion. Do not assume. Do not proceed on your own judgment.
+3. **Brainstorm before building** — when something is ambiguous or has multiple valid approaches, lay out the options and ask. Matt understands tradeoffs at the systems level.
 4. **Group 6 items are hard stops** — do not touch `docker-compose.yml`, `audit_logger`, or `settings.json` without an explicit conversation first. Propose, discuss, get a clear go-ahead.
 
 When in doubt: explain what you see, what the options are, and what you’d recommend — then wait.
@@ -151,7 +151,7 @@ docs/wiki/tools/utility/README.md
 
 ### Group 6 — Hard stops: discuss with Matt before touching anything here
 
-These are not doc edits. Each one requires a conversation, options presented in plain English, and explicit approval before any work begins.
+These are not doc edits. Each one requires a conversation, options on the table, and explicit approval before any work begins.
 
 **`docker-compose.yml`** — running 5 EPAM images that need decisions:
 - `epam/ai-dial-chat-themes` → DELETE (replaced by React app)
@@ -162,7 +162,7 @@ These are not doc edits. Each one requires a conversation, options presented in 
 
 Also: Keycloak realm named `dial`, DB user named `dial` — renaming is a breaking migration, discuss separately.
 
-**`infrastructure/interceptors/audit_logger/app.py`** — built as a DIAL interceptor using `DIAL_CORE_URL`. This is a rewrite, not a find-and-replace. Needs to become a ContextForge plugin. Present the approach to Matt in plain English before writing any code.
+**`infrastructure/interceptors/audit_logger/app.py`** — built as a DIAL interceptor using `DIAL_CORE_URL`. This is a rewrite, not a find-and-replace. Needs to become a ContextForge plugin. Present the approach to Matt before writing any code.
 
 **`infrastructure/settings/settings.json`** — `AIDIAL_SETTINGS` config for DIAL Core. Gets deleted or replaced with ContextForge config when DIAL Core is removed. Discuss with Matt before touching.
 
