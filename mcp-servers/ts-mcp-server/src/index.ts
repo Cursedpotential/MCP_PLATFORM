@@ -15,6 +15,8 @@ import { AdminTools } from "./tools/AdminTools.js";
 import { ReviewQueue } from "./tools/ReviewQueue.js";
 import { EvidenceIngestor } from "./tools/EvidenceIngestor.js";
 import { Pass1Runner } from "./tools/Pass1Runner.js";
+import { SbvClient } from "./tools/SbvClient.js";
+import { SbvIngestor } from "./tools/SbvIngestor.js";
 
 /**
  * AI DIAL TypeScript MCP Server
@@ -66,6 +68,19 @@ function getIngestor(): EvidenceIngestor {
 function getPass1(): Pass1Runner {
   if (!_pass1) _pass1 = new Pass1Runner(getVault(), getPg());
   return _pass1;
+}
+
+let _sbvClient: SbvClient | null = null;
+let _sbvIngestor: SbvIngestor | null = null;
+
+function getSbvClient(): SbvClient {
+  if (!_sbvClient) _sbvClient = new SbvClient();
+  return _sbvClient;
+}
+
+function getSbvIngestor(): SbvIngestor {
+  if (!_sbvIngestor) _sbvIngestor = new SbvIngestor(getVault(), getPg(), getSbvClient());
+  return _sbvIngestor;
 }
 
 // ---------------------------------------------------------------------------
@@ -319,6 +334,35 @@ function createMcpServer(): Server {
           required: ["query"],
         },
       },
+      // ----- SBV (SMS Backup Viewer) Tools -----
+      {
+        name: "sbv_ingest",
+        description: "Pulls all conversations, messages, and calls from the SBV sidecar and ingests them through the full evidence pipeline (SHA-256 hash → DuckDB dedup → UUIDv7 → PostgreSQL evidence write → write tracking).",
+        inputSchema: {
+          type: "object",
+          properties: {
+            device_id: { type: "string", description: "Optional device ID for deduplication." },
+            case_id: { type: "string", description: "Optional case ID for grouping." },
+          },
+        },
+      },
+      {
+        name: "sbv_search",
+        description: "Full-text search across messages stored in SBV (read-only, no evidence pipeline write). Useful for quick lookups before deciding to ingest.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "Search query." },
+            limit: { type: "integer", description: "Max results (default: 100).", default: 100 },
+          },
+          required: ["query"],
+        },
+      },
+      {
+        name: "sbv_health",
+        description: "Check if the SBV sidecar service is reachable.",
+        inputSchema: { type: "object", properties: {} },
+      },
     ],
   }));
 
@@ -447,37 +491,195 @@ function createMcpServer(): Server {
 
       case "evidence_search": {
         const { query, limit, platform, case_id } = args as any;
-        // Semantic search via pgvector — requires embedding the query first
-        // For now: keyword fallback search until py-mcp-server embedding is wired
+        const maxResults = Number(limit ?? 20);
+
+        // ---------------------------------------------------------------
+        // Attempt semantic vector search via py-mcp-server
+        // Falls back to keyword search if embedding service is unavailable
+        // ---------------------------------------------------------------
+        let vectorResults: any[] | null = null;
+        try {
+          // Step 1: Embed the query
+          const embedResp = await fetch(
+            (process.env.PY_MCP_URL ?? 'http://py-mcp-server:8082') + '/mcp',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'tools/call',
+                params: {
+                  name: 'semantica_generate_embeddings',
+                  arguments: { text: query },
+                },
+                id: 1,
+              }),
+              signal: AbortSignal.timeout(15000),
+            },
+          );
+
+          if (embedResp.ok) {
+            const embedData = (await embedResp.json()) as any;
+            const embedContent = embedData?.result?.content?.[0]?.text;
+            if (embedContent) {
+              const { embedding } = JSON.parse(embedContent);
+              if (embedding && embedding.length > 0) {
+                // Step 2: Search LanceDB with the embedded query
+                // Build LanceDB search arguments with optional platform filter
+                const lanceDbArgs: Record<string, unknown> = {
+                  collection: 'evidence_chunks',
+                  query_text: query,
+                  top_k: maxResults,
+                };
+                if (platform) {
+                  lanceDbArgs.filters = { platform };
+                }
+
+                const searchResp = await fetch(
+                  (process.env.PY_MCP_URL ?? 'http://py-mcp-server:8082') + '/mcp',
+                  {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      jsonrpc: '2.0',
+                      method: 'tools/call',
+                      params: {
+                        name: 'lancedb_vector_search',
+                        arguments: lanceDbArgs,
+                      },
+                      id: 2,
+                    }),
+                    signal: AbortSignal.timeout(15000),
+                  },
+                );
+
+                if (searchResp.ok) {
+                  const searchData = (await searchResp.json()) as any;
+                  const searchContent = searchData?.result?.content?.[0]?.text;
+                  if (searchContent) {
+                    let parsed = JSON.parse(searchContent);
+                    // Safety net: client-side platform filtering in case LanceDB
+                    // returns unfiltered results (defensive programming)
+                    if (platform && Array.isArray(parsed)) {
+                      parsed = parsed.filter((r: any) => r.platform === platform);
+                    }
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                      vectorResults = parsed;
+                    }
+                  }
+                }
+
+                // Step 3: Also search PostgreSQL pgvector on evidence.messages
+                if (!vectorResults || vectorResults.length === 0) {
+                  const embeddingStr = `[${embedding.join(',')}]`;
+                  try {
+                    const pgVectorSql = platform
+                      ? `SELECT id, conversation_id, sender, recipient, body, timestamp, platform, direction,
+                                1 - (embedding <=> $1::vector) AS similarity
+                         FROM evidence.messages
+                         WHERE embedding IS NOT NULL AND platform = $2
+                         ORDER BY embedding <=> $1::vector
+                         LIMIT $3`
+                      : `SELECT id, conversation_id, sender, recipient, body, timestamp, platform, direction,
+                                1 - (embedding <=> $1::vector) AS similarity
+                         FROM evidence.messages
+                         WHERE embedding IS NOT NULL
+                         ORDER BY embedding <=> $1::vector
+                         LIMIT $2`;
+                    const pgParams = platform
+                      ? [embeddingStr, platform, maxResults]
+                      : [embeddingStr, maxResults];
+                    const pgResults = await getPg().query(pgVectorSql, pgParams);
+                    if (Array.isArray(pgResults) && pgResults.length > 0) {
+                      vectorResults = pgResults as any[];
+                    }
+                  } catch (_pgVecErr) {
+                    // pgvector search failure — fall through to keyword
+                  }
+                }
+              }
+            }
+          }
+        } catch (_err) {
+          // Embedding service unavailable — fall through to keyword search
+        }
+
+        // If vector search returned results, return them
+        if (vectorResults && vectorResults.length > 0) {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                search_type: 'semantic',
+                results: vectorResults,
+                count: vectorResults.length,
+              }, null, 2),
+            }],
+          };
+        }
+
+        // ---------------------------------------------------------------
+        // Fallback: keyword search
+        // ---------------------------------------------------------------
         const sql = platform
           ? `SELECT id, conversation_id, sender, recipient, body, timestamp, platform, direction
              FROM evidence.messages
-             WHERE body_lower ILIKE $1 AND platform = $2
+             WHERE body ILIKE $1 AND platform = $2
              ORDER BY timestamp DESC LIMIT $3`
           : `SELECT id, conversation_id, sender, recipient, body, timestamp, platform, direction
              FROM evidence.messages
-             WHERE body_lower ILIKE $1
+             WHERE body ILIKE $1
              ORDER BY timestamp DESC LIMIT $2`;
         const params = platform
-          ? [`%${query}%`, platform, Number(limit ?? 20)]
-          : [`%${query}%`, Number(limit ?? 20)];
+          ? [`%${query}%`, platform, maxResults]
+          : [`%${query}%`, maxResults];
         try {
           const results = await getPg().query(sql, params);
-          return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                search_type: 'keyword',
+                results,
+                count: Array.isArray(results) ? results.length : 0,
+                note: 'Vector search unavailable — using keyword fallback',
+              }, null, 2),
+            }],
+          };
         } catch (err: any) {
-          // Fallback: body column without body_lower
-          const fallbackSql = platform
-            ? `SELECT id, conversation_id, sender, recipient, body, timestamp, platform, direction
-               FROM evidence.messages
-               WHERE body ILIKE $1 AND platform = $2
-               ORDER BY timestamp DESC LIMIT $3`
-            : `SELECT id, conversation_id, sender, recipient, body, timestamp, platform, direction
-               FROM evidence.messages
-               WHERE body ILIKE $1
-               ORDER BY timestamp DESC LIMIT $2`;
-          const results = await getPg().query(fallbackSql, params);
-          return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+          return { content: [{ type: "text", text: JSON.stringify({ error: err.message }) }] };
         }
+      }
+
+      // ---- SBV (SMS Backup Viewer) Tools ----
+
+      case "sbv_ingest": {
+        const { device_id, case_id } = args as any;
+        const result = await getSbvIngestor().ingest({
+          deviceId: device_id,
+          caseId: case_id,
+        });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+
+      case "sbv_search": {
+        const { query, limit } = args as any;
+        const results = await getSbvClient().search(String(query), Number(limit ?? 100));
+        return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+      }
+
+      case "sbv_health": {
+        const reachable = await getSbvClient().healthCheck();
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              status: reachable ? "ok" : "unreachable",
+              sbv_url: process.env.SBV_URL ?? "http://sbv:8081",
+              web_ui: "http://localhost:8084 (direct) or http://localhost/sbv/ (via Caddy)",
+            }, null, 2),
+          }],
+        };
       }
 
       default:

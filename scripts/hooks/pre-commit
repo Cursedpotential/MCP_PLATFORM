@@ -1,0 +1,195 @@
+#!/usr/bin/env sh
+# =============================================================================
+# MCP_PLATFORM pre-commit hook
+# Enforces: no stubs, no DIAL references in new code, no hardcoded secrets,
+#           no deleted files (must use _DEPRECATED/), no container start commands
+# =============================================================================
+set -eu
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+FAIL=0
+WARNS=0
+
+RED='\033[0;31m'
+YEL='\033[0;33m'
+GRN='\033[0;32m'
+NC='\033[0m'
+
+fail()  { printf "${RED}[FAIL]${NC} %s\n" "$1"; FAIL=1; }
+warn()  { printf "${YEL}[WARN]${NC} %s\n" "$1"; WARNS=$((WARNS+1)); }
+info()  { printf "${GRN}[OK]${NC}   %s\n" "$1"; }
+
+echo "────────────────────────────────────────────"
+echo " MCP_PLATFORM pre-commit guardrails"
+echo "────────────────────────────────────────────"
+
+# Get list of staged files (added or modified, not deleted)
+STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -z "$STAGED" ]; then
+  info "No staged files — nothing to check"
+  exit 0
+fi
+
+# ─── 1. STUB CHECK ────────────────────────────────────────────────────────────
+# Catches: throw new Error("not implemented"), TODO:, FIXME:, placeholder bodies,
+#          stub function bodies, pass  (Python stub), ... (TypeScript stub body)
+echo ""
+echo "[ 1/6 ] Checking for stubs..."
+
+STUB_PATTERNS='TODO:|FIXME:|throw new Error\("not implemented"\)|throw new Error\('"'"'not implemented'"'"'\)|# TODO|# FIXME|\.\.\.(\s*\/\/.*)?$|pass\s*#\s*(stub|TODO|placeholder)|NotImplementedError|raise NotImplementedError'
+
+STUB_FILES=""
+for f in $STAGED; do
+  # Only check source files
+  case "$f" in
+    *.ts|*.tsx|*.js|*.py|*.sh) ;;
+    *) continue ;;
+  esac
+  # Skip _DEPRECATED and archive paths
+  case "$f" in
+    _DEPRECATED/*|docs/wiki/archive/*) continue ;;
+  esac
+  if git show ":$f" | grep -nE "$STUB_PATTERNS" >/tmp/stub-check.$$ 2>/dev/null; then
+    fail "Stub pattern found in: $f"
+    cat /tmp/stub-check.$$
+    STUB_FILES="$STUB_FILES $f"
+  fi
+  rm -f /tmp/stub-check.$$
+done
+
+[ -z "$STUB_FILES" ] && info "No stubs found"
+
+# ─── 2. DIAL REFERENCE CHECK ─────────────────────────────────────────────────
+# Catches new code referencing deprecated DIAL Core / DIAL Chat / dial-stack
+# Excludes archive/, _DEPRECATED/, and ADR documents (which must reference it)
+echo ""
+echo "[ 2/6 ] Checking for DIAL references in new code..."
+
+DIAL_PATTERN='ai-dial-core|dial-chat|dial-stack|epam/ai-dial|ai\.dial\.core|aidial\.'
+
+for f in $STAGED; do
+  case "$f" in
+    *.ts|*.tsx|*.js|*.py|*.sh|*.yml|*.yaml|*.json) ;;
+    *) continue ;;
+  esac
+  case "$f" in
+    _DEPRECATED/*|docs/wiki/archive/*|DECISION_REGISTER*|*ADR*) continue ;;
+  esac
+  if git show ":$f" | grep -inE "$DIAL_PATTERN" >/tmp/dial-check.$$ 2>/dev/null; then
+    fail "DIAL reference in new code (deprecated per ADR-033): $f"
+    cat /tmp/dial-check.$$
+  fi
+  rm -f /tmp/dial-check.$$
+done
+
+[ "$FAIL" -eq 0 ] && info "No DIAL references in active code"
+
+# ─── 3. SECRET CHECK ──────────────────────────────────────────────────────────
+echo ""
+echo "[ 3/6 ] Checking for secrets..."
+
+check_secret() {
+  pattern=$1; label=$2
+  for f in $STAGED; do
+    case "$f" in .env*|*.pem|*.key) continue ;; esac
+    if git show ":$f" | grep -nE "$pattern" >/tmp/secret-check.$$ 2>/dev/null; then
+      fail "Possible $label in: $f"
+      cat /tmp/secret-check.$$
+    fi
+    rm -f /tmp/secret-check.$$
+  done
+}
+
+check_secret 'gsk_[A-Za-z0-9]{20,}' "Groq API key"
+check_secret 'sk-[A-Za-z0-9]{32,}' "OpenAI-style API key"
+check_secret 'AIza[0-9A-Za-z\-_]{35}' "Google API key"
+check_secret 'CONDUCTOR_AUTH_SECRET\s*=\s*["\x27][^"$\x27{][^"$\x27{]{8,}' "Conductor auth secret hardcoded"
+check_secret '-----BEGIN (RSA|EC|OPENSSH|PGP) PRIVATE KEY-----' "Private key material"
+check_secret 'password\s*[:=]\s*["\x27][^"$\x27{]{6,}' "Hardcoded password"
+
+[ "$FAIL" -eq 0 ] && info "No secrets detected"
+
+# ─── 4. DELETED FILES CHECK ───────────────────────────────────────────────────
+# Nothing gets deleted — must move to _DEPRECATED/ instead
+echo ""
+echo "[ 4/6 ] Checking for deleted files..."
+
+DELETED=$(git diff --cached --name-only --diff-filter=D)
+if [ -n "$DELETED" ]; then
+  for f in $DELETED; do
+    case "$f" in
+      # Allow deletions of temp/generated files
+      *.pyc|*.pyo|__pycache__/*|*.tsbuildinfo|dist/*|build/*) continue ;;
+    esac
+    fail "File deletion detected: $f"
+    printf "       Move to _DEPRECATED/%s instead of deleting.\n" "$f"
+  done
+else
+  info "No file deletions"
+fi
+
+# ─── 5. CONDUCTOR GATE CHECK ─────────────────────────────────────────────────
+# Catch workflow definitions being committed to non-staging paths without approval comment
+echo ""
+echo "[ 5/6 ] Checking CONDUCTOR GATE..."
+
+CONDUCTOR_GATE_PASSED=0
+for f in $STAGED; do
+  case "$f" in
+    */workflows/*.json|*/workflow-definitions/*.json)
+      # Check if commit message contains gate approval marker
+      # Since we can't read the commit msg here, warn and require annotation
+      warn "Conductor workflow definition staged: $f"
+      printf "       Ensure CONDUCTOR GATE has lifted (first ingest test passed).\n"
+      printf "       Add '# GATE-LIFTED' comment in the file header if approved.\n"
+      if git show ":$f" | grep -q "GATE-LIFTED" 2>/dev/null; then
+        info "  GATE-LIFTED marker found — proceeding"
+      else
+        fail "  No GATE-LIFTED marker in workflow definition: $f"
+      fi
+      ;;
+  esac
+done
+
+[ "$FAIL" -eq 0 ] && [ "$WARNS" -eq 0 ] && info "Conductor gate check passed"
+
+# ─── 6. AGNO / N8N REFERENCE CHECK ───────────────────────────────────────────
+echo ""
+echo "[ 6/6 ] Checking for removed component references (Agno, n8n)..."
+
+REMOVED_PATTERN='import.*agno|from agno|require.*agno|agno\.Agent|n8n_webhook|n8n\.workflow|n8nWorkflow'
+
+for f in $STAGED; do
+  case "$f" in
+    *.ts|*.tsx|*.js|*.py) ;;
+    *) continue ;;
+  esac
+  case "$f" in
+    _DEPRECATED/*|docs/wiki/archive/*|DECISION_REGISTER*) continue ;;
+  esac
+  if git show ":$f" | grep -nE "$REMOVED_PATTERN" >/tmp/removed-check.$$ 2>/dev/null; then
+    fail "Reference to removed component (Agno/n8n removed per ADR-033): $f"
+    cat /tmp/removed-check.$$
+  fi
+  rm -f /tmp/removed-check.$$
+done
+
+[ "$FAIL" -eq 0 ] && info "No removed component references"
+
+# ─── RESULT ───────────────────────────────────────────────────────────────────
+echo ""
+echo "────────────────────────────────────────────"
+if [ "$FAIL" -ne 0 ]; then
+  printf "${RED}pre-commit FAILED — fix the issues above before committing.${NC}\n"
+  echo "Run scripts/check-guardrails.sh for a full standalone report."
+  exit 1
+fi
+
+if [ "$WARNS" -ne 0 ]; then
+  printf "${YEL}pre-commit passed with %d warning(s) — review above.${NC}\n" "$WARNS"
+  exit 0
+fi
+
+printf "${GRN}pre-commit passed.${NC}\n"
+exit 0

@@ -1,0 +1,177 @@
+name: Guardrail Checks
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs on the same branch/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guardrails:
+    name: MCP Platform Guardrails
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history needed for diff-based checks
+
+      - name: Make hooks and scripts executable
+        run: |
+          chmod +x scripts/hooks/pre-commit \
+                   scripts/hooks/pre-push \
+                   scripts/hooks/commit-msg \
+                   scripts/check-guardrails.sh \
+                   scripts/install-hooks.sh
+
+      # ── 1. STUB CHECK ────────────────────────────────────────────────────────
+      - name: Stub check
+        id: stub-check
+        run: |
+          FAIL=0
+          STUB_PATTERNS='TODO:|FIXME:|throw new Error\("not implemented"\)|throw new Error\('"'"'not implemented'"'"'\)|# TODO|# FIXME|NotImplementedError|raise NotImplementedError|pass\s*#\s*(stub|TODO|placeholder)'
+          while IFS= read -r -d '' f; do
+            case "$f" in
+              *.ts|*.tsx|*.js|*.py|*.sh) ;;
+              *) continue ;;
+            esac
+            case "$f" in
+              */_DEPRECATED/*|*/docs/wiki/archive/*) continue ;;
+            esac
+            if grep -nE "$STUB_PATTERNS" "$f" >/tmp/stub-ci 2>/dev/null; then
+              echo "::error file=$f::Stub pattern found"
+              cat /tmp/stub-ci | while IFS= read -r line; do echo "  $line"; done
+              FAIL=1
+            fi
+          done < <(git ls-files -z -- '*.ts' '*.tsx' '*.js' '*.py' '*.sh')
+          [ "$FAIL" -eq 0 ] && echo "No stubs found." || exit 1
+
+      # ── 2. DIAL REFERENCE CHECK ───────────────────────────────────────────
+      - name: DIAL reference check (deprecated per ADR-033)
+        id: dial-check
+        run: |
+          FAIL=0
+          DIAL_PATTERN='ai-dial-core|dial-chat|dial-stack|epam/ai-dial|aidial\.'
+          while IFS= read -r -d '' f; do
+            case "$f" in
+              */_DEPRECATED/*|*/docs/wiki/archive/*|*/DECISION_REGISTER*|*ADR*) continue ;;
+            esac
+            if grep -inE "$DIAL_PATTERN" "$f" >/tmp/dial-ci 2>/dev/null; then
+              echo "::error file=$f::DIAL reference found (deprecated per ADR-033)"
+              cat /tmp/dial-ci
+              FAIL=1
+            fi
+          done < <(git ls-files -z -- '*.ts' '*.tsx' '*.js' '*.py' '*.yml' '*.yaml' '*.json')
+          [ "$FAIL" -eq 0 ] && echo "No DIAL references found." || exit 1
+
+      # ── 3. AGNO / N8N REFERENCE CHECK ─────────────────────────────────────
+      - name: Agno/n8n reference check (removed per ADR-033)
+        id: removed-check
+        run: |
+          FAIL=0
+          REMOVED_PATTERN='import.*agno|from agno|require.*agno|agno\.Agent|n8n_webhook|n8n\.workflow|n8nWorkflow'
+          while IFS= read -r -d '' f; do
+            case "$f" in
+              */_DEPRECATED/*|*/docs/wiki/archive/*|*/DECISION_REGISTER*) continue ;;
+            esac
+            if grep -nE "$REMOVED_PATTERN" "$f" >/tmp/removed-ci 2>/dev/null; then
+              echo "::error file=$f::Removed component reference (Agno/n8n per ADR-033)"
+              cat /tmp/removed-ci
+              FAIL=1
+            fi
+          done < <(git ls-files -z -- '*.ts' '*.tsx' '*.js' '*.py')
+          [ "$FAIL" -eq 0 ] && echo "No Agno/n8n references found." || exit 1
+
+      # ── 4. SECRET SCAN ────────────────────────────────────────────────────
+      - name: Secret scan
+        id: secret-scan
+        run: |
+          FAIL=0
+          PATTERNS=(
+            'gsk_[A-Za-z0-9]{20,}'
+            'sk-[A-Za-z0-9]{32,}'
+            'AIza[0-9A-Za-z\-_]{35}'
+            '-----BEGIN (RSA|EC|OPENSSH|PGP) PRIVATE KEY-----'
+            'CONDUCTOR_AUTH_SECRET\s*=\s*"[^"$]{8,}"'
+          )
+          LABELS=(
+            "Groq API key"
+            "OpenAI-style API key"
+            "Google API key"
+            "Private key material"
+            "Hardcoded Conductor secret"
+          )
+          for i in "${!PATTERNS[@]}"; do
+            if git grep -nI -E "${PATTERNS[$i]}" HEAD -- . \
+               ':!_DEPRECATED/' ':!*.pem' ':!*.key' ':!.env*' \
+               >/tmp/secret-ci 2>/dev/null; then
+              echo "::error::Possible ${LABELS[$i]} found in codebase"
+              cat /tmp/secret-ci
+              FAIL=1
+            fi
+          done
+          [ "$FAIL" -eq 0 ] && echo "No secrets detected." || exit 1
+
+      # ── 5. CONDUCTOR GATE CHECK ──────────────────────────────────────────
+      - name: Conductor gate check
+        id: gate-check
+        run: |
+          FAIL=0
+          while IFS= read -r -d '' f; do
+            if ! grep -q "GATE-LIFTED" "$f" 2>/dev/null; then
+              echo "::error file=$f::Conductor workflow definition missing GATE-LIFTED marker"
+              echo "       Add '// GATE-LIFTED: <date> <approver>' once first ingest test passes."
+              FAIL=1
+            fi
+          done < <(git ls-files -z -- '*/workflows/*.json' '*/workflow-definitions/*.json')
+          [ "$FAIL" -eq 0 ] && echo "Conductor gate check passed (or no workflow definitions found)." || exit 1
+
+      # ── 6. EVIDENCE DATA LEAK CHECK ──────────────────────────────────────
+      - name: Evidence data leak check
+        id: data-leak-check
+        run: |
+          FAIL=0
+          LEAKED=$(git ls-files -- \
+            'data/**' 'evidence/**' '*.duckdb' '*.sqlite' '*.sqlite3' '*.db' \
+            2>/dev/null || true)
+          if [ -n "$LEAKED" ]; then
+            echo "::error::Evidence/data files committed — never commit actual data"
+            echo "$LEAKED"
+            FAIL=1
+          fi
+          [ "$FAIL" -eq 0 ] && echo "No evidence data files found." || exit 1
+
+      # ── 7. CONVENTIONAL COMMIT CHECK (PRs and direct pushes to main) ─────
+      - name: Conventional commit check
+        id: commit-format
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          CONV_PATTERN='^(feat|fix|chore|docs|refactor|test|style|ci|perf|revert|wip)(\([a-zA-Z0-9_/-]+\))?(!)?:\s.+'
+          FAIL=0
+          # Check all commits in this push that aren't already on remote
+          git log --format="%H %s" origin/main..HEAD 2>/dev/null | while IFS=' ' read -r sha subject; do
+            if ! echo "$subject" | grep -qE "$CONV_PATTERN"; then
+              echo "::warning::Commit $sha does not follow conventional commit format: $subject"
+            fi
+          done
+          echo "Conventional commit check complete."
+
+      # ── SUMMARY ──────────────────────────────────────────────────────────
+      - name: Guardrail summary
+        if: always()
+        run: |
+          echo "### Guardrail Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Stub check | ${{ steps.stub-check.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| DIAL reference check | ${{ steps.dial-check.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Agno/n8n reference check | ${{ steps.removed-check.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret scan | ${{ steps.secret-scan.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Conductor gate check | ${{ steps.gate-check.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Evidence data leak check | ${{ steps.data-leak-check.outcome }} |" >> $GITHUB_STEP_SUMMARY

@@ -8,7 +8,7 @@
 
 The MCP Platform document intelligence system uses a **pluggable router architecture** to process documents through the best available engine for each document type, cost tolerance, and privacy constraint. Rather than committing to a single engine, the system defines a common `EngineRouter` interface that all 11 supported engines implement. Engines are opt-in — only engines with available runtimes or credentials activate.
 
-This architecture was formally adopted in ADR-023 and ADR-024. See `DECISION_REGISTER_POST_DIAL.md`.
+This architecture was formally adopted in ADR-023 and ADR-024. See `DECISION_REGISTER.md`.
 
 ---
 

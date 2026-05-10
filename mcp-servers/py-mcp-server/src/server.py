@@ -331,6 +331,7 @@ def lancedb_vector_search(
     collection: str,
     query_text: str,
     top_k: int = 10,
+    filters: Optional[dict] = None,
 ) -> str:
     """
     Perform semantic vector search in a LanceDB collection.
@@ -339,6 +340,7 @@ def lancedb_vector_search(
         collection: Name of the LanceDB collection/table.
         query_text: Text query — will be embedded and searched by similarity.
         top_k: Number of results to return (default: 10).
+        filters: Optional metadata filters (e.g., {"platform": "sms"}).
 
     Returns:
         JSON array of the top-k most similar records with distance scores.
@@ -355,7 +357,20 @@ def lancedb_vector_search(
     if not isinstance(query_embedding, list):
         query_embedding = query_embedding.tolist()
 
-    results = table.search(query_embedding).limit(top_k).to_pandas()
+    query = table.search(query_embedding).limit(top_k)
+
+    # Apply metadata filters if provided (e.g., platform filter)
+    # Whitelist of allowed filter columns to prevent injection attacks
+    allowed_filter_columns = {"platform", "sender", "recipient", "conversation_id"}
+    if filters:
+        for key, value in filters.items():
+            if key not in allowed_filter_columns:
+                continue  # Skip unknown filter columns
+            # Escape single quotes in value to prevent SQL injection
+            escaped_value = str(value).replace("'", "''")
+            query = query.where(f"{key} = '{escaped_value}'")
+
+    results = query.to_pandas()
     return results.to_json(orient="records", indent=2, default_handler=str)
 
 

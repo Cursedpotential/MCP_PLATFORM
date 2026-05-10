@@ -1,0 +1,10 @@
+{
+  "$schema": "https://opencode.ai/config.schema.json",
+  "default_agent": "platform",
+  "instructions": [
+    "AGENTS.md",
+    "MCP_PLATFORM_SYSTEM_PROMPT_V3.md",
+    "GROUND_TRUTH.md",
+    "ORCHESTRATION_CONTRACT.md"
+  ]
+}
