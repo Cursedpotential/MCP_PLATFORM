@@ -5,11 +5,25 @@
 
 ---
 
+## Critical: Human in the loop — always
+
+**Matt (the owner) is non-technical but makes all decisions. He must be involved before anything beyond straightforward doc edits.**
+
+Rules:
+1. **Documentation cleanup first** — Groups 1–5 below are pure find-and-replace on text files. Do those first, they do not require discussion.
+2. **Before any architecture, schema, table, logic, or infrastructure change** — stop, explain what you’re thinking in plain English, and have a discussion. Do not assume. Do not proceed on your own judgment.
+3. **Brainstorm before building** — when something is ambiguous or has multiple valid approaches, lay out the options clearly and ask. Matt may not know the technical terms but he knows what outcome he needs.
+4. **Group 6 items are hard stops** — do not touch `docker-compose.yml`, `audit_logger`, or `settings.json` without an explicit conversation first. Propose, discuss, get a clear go-ahead.
+
+When in doubt: explain what you see, what the options are, and what you’d recommend — then wait.
+
+---
+
 ## What this is
 
 Forensic evidence platform for an active custody case. It runs MCP tool servers, a React analyst UI, and PostgreSQL/DuckDB/Neo4j/LanceDB storage. It used to use AI DIAL (EPAM) as the gateway and chat UI. DIAL is fully deprecated and replaced — but ~60 files still have stale DIAL references that confuse every AI agent that reads them.
 
-**Your job: find and replace every active DIAL reference with the correct current term.**
+**First job: clean up documentation (Groups 1–5). No discussion needed for these — they are text edits only.**
 
 ---
 
@@ -42,7 +56,7 @@ Previous work already handled:
 - Anything under `_DEPRECATED/`
 - Anything under `docs/wiki/archive/`
 - Session transcripts: `docs/references/opencode-session-*.md`, `docs/references/session-summary-*.md`
-- `DECISION_REGISTER.md` — documents DIAL as deprecated, that's intentional
+- `DECISION_REGISTER.md` — documents DIAL as deprecated, that’s intentional
 - `docs/plans/DIAL_PURGE_HANDOFF.md` — this file
 
 ---
@@ -135,20 +149,22 @@ docs/wiki/tools/utility/README.md
 - `mcp-servers/memory/MEMORY.md`
 - `infrastructure/memory/MEMORY.md`
 
-### Group 6 — Engineering decisions required (flag for Matt, do NOT touch without approval)
+### Group 6 — Hard stops: discuss with Matt before touching anything here
+
+These are not doc edits. Each one requires a conversation, options presented in plain English, and explicit approval before any work begins.
 
 **`docker-compose.yml`** — running 5 EPAM images that need decisions:
 - `epam/ai-dial-chat-themes` → DELETE (replaced by React app)
 - `epam/ai-dial-chat` → DELETE
 - `epam/ai-dial-core` → REPLACE with ContextForge container (needs image name from ContextForge docs)
 - `epam/ai-dial-auth-helper` → DELETE (Keycloak handles auth directly per ADR-008)
-- `epam/ai-dial-analytics-realtime` → no replacement planned — flag for Matt
+- `epam/ai-dial-analytics-realtime` → no replacement planned — discuss with Matt
 
-Also: Keycloak realm named `dial`, DB user named `dial` — renaming is a breaking migration, separate decision needed.
+Also: Keycloak realm named `dial`, DB user named `dial` — renaming is a breaking migration, discuss separately.
 
-**`infrastructure/interceptors/audit_logger/app.py`** — built as a DIAL interceptor using `DIAL_CORE_URL`. This is a **rewrite**, not a find-and-replace. Needs to become a ContextForge plugin using the `post_invoke` hook. Flag for Matt.
+**`infrastructure/interceptors/audit_logger/app.py`** — built as a DIAL interceptor using `DIAL_CORE_URL`. This is a rewrite, not a find-and-replace. Needs to become a ContextForge plugin. Present the approach to Matt in plain English before writing any code.
 
-**`infrastructure/settings/settings.json`** — `AIDIAL_SETTINGS` config for DIAL Core. Gets deleted or replaced with ContextForge config when DIAL Core is removed from docker-compose. Flag for Matt.
+**`infrastructure/settings/settings.json`** — `AIDIAL_SETTINGS` config for DIAL Core. Gets deleted or replaced with ContextForge config when DIAL Core is removed. Discuss with Matt before touching.
 
 ---
 
