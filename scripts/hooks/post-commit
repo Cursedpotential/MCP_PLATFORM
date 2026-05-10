@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# =============================================================================
+# MCP_PLATFORM post-commit hook
+# 1. Pulls latest from remote (keeps local in sync)
+# 2. Pushes the new commit to origin
+# 3. rsyncs the repo to the Windows project mount at /mnt/e/projects/
+# =============================================================================
+set -euo pipefail
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+REPO_NAME=$(basename "$REPO_ROOT")
+WINDOWS_DEST="/mnt/e/projects/${REPO_NAME}/"
+
+GRN='\033[0;32m'
+YEL='\033[0;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+ok()   { printf "${GRN}[post-commit]${NC} %s\n" "$1"; }
+warn() { printf "${YEL}[post-commit]${NC} %s\n" "$1"; }
+err()  { printf "${RED}[post-commit]${NC} %s\n" "$1"; }
+
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "HEAD")
+
+# ── 1. Pull from remote ───────────────────────────────────────────────────
+ok "Syncing with remote (branch: $BRANCH)..."
+if git fetch origin "$BRANCH" --quiet 2>/dev/null; then
+  BEHIND=$(git rev-list HEAD..origin/"$BRANCH" --count 2>/dev/null || echo 0)
+  if [ "$BEHIND" -gt 0 ]; then
+    ok "Remote has $BEHIND new commit(s) — pulling..."
+    git pull origin "$BRANCH" --ff-only --quiet || warn "Fast-forward pull failed — skipping pull (resolve manually)"
+  else
+    ok "Already up to date with remote."
+  fi
+else
+  warn "Could not reach remote — skipping pull."
+fi
+
+# ── 2. Push to remote ─────────────────────────────────────────────────────
+ok "Pushing to origin/$BRANCH..."
+if git push origin "$BRANCH" --quiet 2>/dev/null; then
+  ok "Pushed successfully."
+else
+  warn "Push failed — check auth or network. Continuing with local sync."
+fi
+
+# ── 3. Sync to Windows partition ───────────────────────────────────────────────
+if ! mountpoint -q /mnt/e 2>/dev/null; then
+  warn "/mnt/e is not mounted — skipping Windows sync."
+  exit 0
+fi
+
+if ! command -v rsync &>/dev/null; then
+  warn "rsync not found — skipping Windows sync. Install with: apt install rsync"
+  exit 0
+fi
+
+ok "Syncing to $WINDOWS_DEST ..."
+mkdir -p "$WINDOWS_DEST"
+
+rsync -a --delete \
+  --exclude='.git/' \
+  --exclude='node_modules/' \
+  --exclude='__pycache__/' \
+  --exclude='*.pyc' \
+  --exclude='.venv/' \
+  --exclude='venv/' \
+  --exclude='dist/' \
+  --exclude='build/' \
+  --exclude='*.duckdb' \
+  --exclude='*.sqlite' \
+  --exclude='*.db' \
+  --exclude='.env' \
+  --exclude='.env.local' \
+  "$REPO_ROOT/" "$WINDOWS_DEST"
+
+ok "Synced to $WINDOWS_DEST"
+exit 0

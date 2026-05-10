@@ -35,8 +35,8 @@ echo "────────────────────────�
 [ -d "$HOOKS_SRC" ] || fail "Hook sources not found at $HOOKS_SRC"
 [ -d "$HOOKS_DEST" ] || fail ".git/hooks directory not found — is this a git repo?"
 
-# ── Install bash hooks ────────────────────────────────────────────────────────
-for HOOK in pre-commit pre-push commit-msg; do
+# ── Install bash hooks ────────────────────────────────────────────────────
+for HOOK in pre-commit pre-push commit-msg post-commit; do
   SRC="$HOOKS_SRC/$HOOK"
   DEST="$HOOKS_DEST/$HOOK"
 
@@ -58,9 +58,9 @@ for HOOK in pre-commit pre-push commit-msg; do
   info "Installed: $HOOK"
 done
 
-# ── Install PowerShell shims (for Windows/WSL) ────────────────────────────────
+# ── Install PowerShell shims (for Windows/WSL) ────────────────────────────────────────────
 # Git on Windows with PowerShell hooks needs a thin sh shim that delegates to .ps1
-for HOOK in pre-commit pre-push commit-msg; do
+for HOOK in pre-commit pre-push commit-msg post-commit; do
   PS1_SRC="$HOOKS_SRC/${HOOK}.ps1"
   SHIM="$HOOKS_DEST/${HOOK}"  # The sh shim IS the hook — delegates to .ps1
 
@@ -72,11 +72,11 @@ for HOOK in pre-commit pre-push commit-msg; do
   [ "$DRY_RUN" -eq 0 ] && info "PS1 hook available: ${HOOK}.ps1 (called by bash hook when pwsh detected)"
 done
 
-# ── Validate installation ─────────────────────────────────────────────────────
+# ── Validate installation ───────────────────────────────────────────────────────
 if [ "$DRY_RUN" -eq 0 ]; then
   echo ""
   echo "Installed hooks:"
-  for HOOK in pre-commit pre-push commit-msg; do
+  for HOOK in pre-commit pre-push commit-msg post-commit; do
     DEST="$HOOKS_DEST/$HOOK"
     if [ -f "$DEST" ] && [ -x "$DEST" ]; then
       info "$HOOK — executable ✓"
