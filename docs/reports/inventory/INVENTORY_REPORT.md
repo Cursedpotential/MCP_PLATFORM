@@ -109,6 +109,37 @@
 
 ---
 
+## Storage & Retrieval Architecture
+
+The full data infrastructure plan. **No port should bypass this layout.** Semantica is the only sanctioned path to Neo4j and LanceDB — direct clients are forbidden.
+
+| Tier | Component | Role | Accessed Via |
+|---|---|---|---|
+| T1 | **DuckDB** | WORM forensic vault — Pass 1 immutable storage, SHA-256 sealed | `ts-mcp-server` `DuckDbVault.ts` |
+| T2 | **LanceDB** | Vector store — 768-dim embeddings, semantic search | **Semantica only** (`lancedb_vector_search`, `lancedb_upsert`) |
+| T3 | **Neo4j** | Knowledge graph — entities, relations, temporal facts | **Semantica only** (`neo4j_cypher_query`, `neo4j_get_entity_timeline`) |
+| T4 | **PostgreSQL** | Operational/relational store — chunks, queues, audit | `ts-mcp-server` `PostgresWriter.ts`, migrations 001–005 |
+| NLP | **Semantica** ⭐ | NER + relation extraction + temporal facts + conflict detection + embeddings — **replaces Graphiti**, non-negotiable | `py-mcp-server` (FastMCP, 11 tools) — upstream: https://github.com/Hawksight-AI/semantica |
+| API | **WunderGraph Cosmo** (:4000) | GraphQL federation — unified retrieval layer over all tiers | `infrastructure/` (docker-compose) |
+
+### Why Semantica is VIP
+- Pass 1 (blind, 24h window, WORM) and Pass 2 (longitudinal, contradiction detection) both flow through Semantica
+- It is the only producer of embeddings and graph writes
+- Pass1Runner (TS) calls Semantica tools over MCP — do not duplicate its logic in TS
+- Treat the Semantica tool interfaces as authoritative; do not rewrite or stub them
+
+### Old → New Storage Mapping
+| Alpha 1 | Alpha 2 |
+|---|---|
+| `graphiti-client.ts` | Semantica (`neo4j_*` + `lancedb_*` tools) |
+| `chroma-client.ts`, `chroma/*` | Semantica `lancedb_*` tools |
+| `pgvector-client.ts` | LanceDB via Semantica (pgvector retired) |
+| `redis-queue.ts` | Dragonfly |
+| `db.mysql.ts` | PostgreSQL only |
+| Any direct Neo4j driver | Forbidden — go through Semantica |
+
+---
+
 ## Old Codebase — Port Candidates
 
 ### Highest Priority (directly needed for INGEST milestone)
@@ -151,7 +182,7 @@
 | `server/mcp/orchestration/langgraph*.ts` | Same — deprecated |
 | `server/mcp/plugins/n8n.ts` | n8n deprecated per ADR-033 |
 | `server/mcp/storage/chroma-client.ts` | Replaced by LanceDB |
-| `server/mcp/storage/graphiti-client.ts` | Replaced by Neo4j direct |
+| `server/mcp/storage/graphiti-client.ts` | Replaced by **Semantica** (wraps Neo4j + LanceDB) — never call Neo4j directly |
 | `server/core/db.mysql.ts` | Wrong DB — PostgreSQL only |
 | `server/mcp/queue/redis-queue.ts` | Replaced by Dragonfly |
 | `server/mcp/chroma/*.ts` | Replaced by LanceDB |
